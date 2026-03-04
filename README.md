@@ -66,7 +66,7 @@ AI 에이전트를 24/7 자동으로 돌리려면 항상 켜져 있는 서버가
 ### Prerequisites
 
 - GitHub 계정
-- Claude Max 구독 (OAuth 토큰 사용) 또는 Anthropic API Key
+- Claude 구독 (OAuth 토큰 사용) 또는 Anthropic API Key
 
 ### Steps
 
