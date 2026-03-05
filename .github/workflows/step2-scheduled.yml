@@ -31,7 +31,7 @@ jobs:
           claude_args: "--dangerously-skip-permissions"
 
           # Fixed prompt for scheduled execution
-          direct_prompt: |
+          prompt: |
             You are an automated content generator running on a schedule.
 
             ## Task
@@ -60,3 +60,13 @@ jobs:
             - Be factual and cite sources
             - Keep it concise and valuable
             - Ensure the markdown is well-formatted
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "## Claude Code Execution Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

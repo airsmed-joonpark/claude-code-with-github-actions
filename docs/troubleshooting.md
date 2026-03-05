@@ -13,7 +13,8 @@ GitHub Actions에서 Claude Code를 실행할 때 발생할 수 있는 문제와
 5. [OAuth 토큰 만료](#5-oauth-토큰-만료)
 6. [워크플로우 타임아웃](#6-워크플로우-타임아웃)
 7. [Actions 로그 분석 방법](#7-actions-로그-분석-방법)
-8. [기타 문제](#8-기타-문제)
+8. [Claude Code GitHub App 관련](#8-claude-code-github-app-관련)
+9. [기타 문제](#9-기타-문제)
 
 ---
 
@@ -403,7 +404,38 @@ gh run view <run-id> --log-failed
 
 ---
 
-## 8. 기타 문제
+## 8. Claude Code GitHub App 관련
+
+### "Claude Code is not installed on this repository" 에러
+
+**원인**: Claude Code GitHub App이 해당 리포에 설치되지 않았습니다.
+
+**해결**:
+1. https://github.com/apps/claude 방문
+2. Install 클릭 → 대상 리포 선택
+3. 워크플로우 재실행
+
+### "Unexpected input 'direct_prompt'" 경고
+
+**원인**: `direct_prompt`는 유효하지 않은 파라미터입니다.
+
+**해결**: 워크플로우 YAML에서 `direct_prompt:`를 `prompt:`로 변경하세요.
+
+### Claude Code가 "Pro Plan은 OAuth를 지원하지 않는다"고 응답
+
+**원인**: 할루시네이션입니다. Claude Pro, Max 모두 OAuth 토큰을 사용할 수 있습니다.
+
+**해결**: 무시하고 진행하세요. README의 표기가 혼란을 줄 수 있으니 "Claude 구독 (Pro/Max)"로 수정되었습니다.
+
+### Windows에서 실행 시 에러
+
+**원인**: Claude Code CLI는 macOS/Linux 환경을 기본으로 합니다.
+
+**해결**: GitHub Actions는 Ubuntu runner에서 실행되므로 OS에 무관합니다. 로컬에서 Claude Code를 사용하려면 WSL2나 macOS를 사용하세요.
+
+---
+
+## 9. 기타 문제
 
 ### Claude Code 설치 실패
 
@@ -462,6 +494,8 @@ concurrency:
 | git push 실패 | `permissions: contents: write` 설정 |
 | 토큰 만료 | Secret 값 갱신 |
 | 타임아웃 | `--max-turns` 및 `timeout-minutes` 설정 |
+| Claude Code not installed | Claude Code GitHub App 설치 여부 |
+| Unexpected input 'direct_prompt' | `direct_prompt:`를 `prompt:`로 변경 |
 
 ---
 

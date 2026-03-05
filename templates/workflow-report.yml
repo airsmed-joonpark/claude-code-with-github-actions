@@ -1,0 +1,57 @@
+name: "Claude Code Report"
+
+on:
+  workflow_dispatch:
+
+jobs:
+  generate-report:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Claude Code Report
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--dangerously-skip-permissions"
+          prompt: |
+            이 리포지토리의 GitHub Actions 워크플로우들을 분석하고 실행 보고서를 작성해주세요.
+
+            다음 내용을 포함:
+            1. 등록된 워크플로우 목록과 각각의 트리거 조건
+            2. 각 워크플로우의 주요 기능 요약
+            3. 사용 중인 MCP 서버 목록
+            4. 권한(permissions) 설정 현황
+            5. 개선 제안사항
+
+            보고서를 마크다운 형식으로 작성하세요.
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "## Claude Code 실행 보고서" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "> 생성시각: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### 실행 요약 (Execution Summary)" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 항목 | 값 |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|-----|" >> $GITHUB_STEP_SUMMARY
+          echo "| **워크플로우** | ${{ github.workflow }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **트리거** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **실행자** | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **브랜치** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **상태** | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Claude Code 분석 결과" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ -n "${{ steps.claude.outputs.result }}" ]; then
+            echo "${{ steps.claude.outputs.result }}" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "_Claude Code 실행 결과가 없거나 실패했습니다._" >> $GITHUB_STEP_SUMMARY
+          fi

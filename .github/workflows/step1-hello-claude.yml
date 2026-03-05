@@ -1,5 +1,8 @@
 name: "Step 1 - Hello Claude"
 
+# IMPORTANT: Before running, install the Claude Code GitHub App:
+# https://github.com/apps/claude
+
 # The simplest possible Claude Code workflow.
 # Just fork, add your CLAUDE_CODE_OAUTH_TOKEN secret, and run!
 
@@ -49,6 +52,16 @@ jobs:
           claude_args: "--dangerously-skip-permissions"
 
           # For workflow_dispatch, provide a default prompt
-          direct_prompt: |
+          prompt: |
             Analyze this repository structure and suggest improvements.
             Be concise and helpful.
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "## Claude Code Execution Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

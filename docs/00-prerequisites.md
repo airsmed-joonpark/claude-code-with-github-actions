@@ -8,10 +8,11 @@
 
 1. [GitHub 계정 및 Actions 활성화](#1-github-계정-및-actions-활성화)
 2. [Claude 인증 준비](#2-claude-인증-준비)
-3. [CLAUDE_CODE_OAUTH_TOKEN 발급](#3-claude_code_oauth_token-발급)
-4. [GitHub Repository Secrets 설정](#4-github-repository-secrets-설정)
-5. [저장소 Fork 또는 Template 사용](#5-저장소-fork-또는-template-사용)
-6. [비용 안내](#6-비용-안내)
+3. [Claude Code GitHub App 설치](#3-claude-code-github-app-설치)
+4. [CLAUDE_CODE_OAUTH_TOKEN 발급](#4-claude_code_oauth_token-발급)
+5. [GitHub Repository Secrets 설정](#5-github-repository-secrets-설정)
+6. [저장소 Fork 또는 Template 사용](#6-저장소-fork-또는-template-사용)
+7. [비용 안내](#7-비용-안내)
 
 ---
 
@@ -43,9 +44,10 @@ Settings → Actions → General → Actions permissions
 
 GitHub Actions에서 Claude Code를 실행하려면 인증 토큰이 필요합니다. 두 가지 방법 중 하나를 선택하세요.
 
-### 방법 A: Claude Max 구독 (권장)
+### 방법 A: Claude 구독 - Pro 또는 Max (권장)
 
-- [Claude Max](https://claude.ai) 구독이 있으면 **OAuth 토큰**을 발급받아 사용
+- [Claude Pro 또는 Max](https://claude.ai) 구독이 있으면 **OAuth 토큰**을 발급받아 사용
+- Pro, Max 모두 OAuth 토큰을 발급받을 수 있습니다
 - 구독료 외 추가 비용 없음
 - 환경 변수: `CLAUDE_CODE_OAUTH_TOKEN`
 
@@ -57,7 +59,20 @@ GitHub Actions에서 Claude Code를 실행하려면 인증 토큰이 필요합�
 
 ---
 
-## 3. CLAUDE_CODE_OAUTH_TOKEN 발급
+## 3. Claude Code GitHub App 설치
+
+Claude Code를 GitHub Actions에서 사용하려면 GitHub App을 설치해야 합니다.
+
+1. https://github.com/apps/claude 방문
+2. **Install** 버튼 클릭
+3. 대상 리포지토리 선택 (All repositories 또는 특정 리포만)
+4. 설치 완료 확인
+
+> **주의**: 이 단계를 빠뜨리면 워크플로우 실행 시 "Claude Code is not installed on this repository" 에러가 발생합니다.
+
+---
+
+## 4. CLAUDE_CODE_OAUTH_TOKEN 발급
 
 ### 방법 A: Claude Code CLI에서 OAuth 토큰 복사
 
@@ -99,7 +114,7 @@ sk-ant-api03-xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 ---
 
-## 4. GitHub Repository Secrets 설정
+## 5. GitHub Repository Secrets 설정
 
 발급받은 토큰을 GitHub Repository Secret으로 등록합니다.
 
@@ -142,7 +157,7 @@ gh secret set ANTHROPIC_API_KEY --body "sk-ant-api03-xxxx..."
 
 ---
 
-## 5. 저장소 Fork 또는 Template 사용
+## 6. 저장소 Fork 또는 Template 사용
 
 ### Fork 방법 (권장)
 
@@ -172,13 +187,13 @@ gh repo clone <your-username>/claude-code-with-github-actions
 
 ---
 
-## 6. 비용 안내
+## 7. 비용 안내
 
 ### Claude 사용 비용
 
 | 인증 방식 | 비용 구조 | 월 예상 비용 |
 |-----------|----------|-------------|
-| Claude Max (OAuth) | 구독료만 발생 | 구독료 (고정) |
+| Claude Pro/Max (OAuth) | 구독료만 발생 | 구독료 (고정) |
 | Anthropic API Key | 토큰당 과금 | 사용량에 따라 변동 |
 
 ### API Key 과금 기준 (참고)
@@ -208,6 +223,7 @@ gh repo clone <your-username>/claude-code-with-github-actions
 
 - [ ] GitHub 계정 보유
 - [ ] GitHub Actions 활성화 완료
+- [ ] Claude Code GitHub App 설치 완료
 - [ ] Claude 인증 토큰 발급 완료 (OAuth 또는 API Key)
 - [ ] Repository Secret 등록 완료
 - [ ] 저장소 Fork 또는 Template 생성 완료

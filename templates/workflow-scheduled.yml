@@ -79,7 +79,7 @@ jobs:
           #   - "Run the test suite and fix any failing tests"
           #   - "Audit the codebase for security anti-patterns"
           # -----------------------------------------------------------------------
-          direct_prompt: |
+          prompt: |
             ${{ github.event.inputs.prompt_override || 'Check for outdated dependencies. Update any that have patch or minor version updates available. Run tests to verify nothing breaks. If all tests pass, commit the changes with a descriptive message and push to the current branch.' }}
 
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -97,3 +97,13 @@ jobs:
           # Increase for complex multi-step tasks.
           # -----------------------------------------------------------------------
           max_turns: "25"
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "## Claude Code Execution Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

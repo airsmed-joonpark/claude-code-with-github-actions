@@ -272,7 +272,7 @@ jobs:
         id: claude
         uses: anthropics/claude-code-action@v1
         with:
-          direct_prompt_file: /tmp/claude-prompt.txt
+          prompt_file: /tmp/claude-prompt.txt
 
           anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
 
@@ -314,3 +314,13 @@ jobs:
               issue_number: context.issue.number,
               body: body
             });
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "## Claude Code Execution Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

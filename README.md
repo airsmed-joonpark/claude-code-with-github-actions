@@ -21,6 +21,7 @@
 - [Architecture](#-architecture)
 - [Cost Comparison](#-cost-comparison)
 - [Documentation](#-documentation)
+- [FAQ](#-faq)
 - [Based On](#-based-on)
 - [License](#-license)
 
@@ -66,17 +67,29 @@ AI 에이전트를 24/7 자동으로 돌리려면 항상 켜져 있는 서버가
 ### Prerequisites
 
 - GitHub 계정
-- Claude 구독 (OAuth 토큰 사용) 또는 Anthropic API Key
+- Claude 구독 (Pro 또는 Max) 또는 Anthropic API Key
 
 ### Steps
 
-**1. Fork this repository**
+**1. 새 리포지토리 생성**
+
+> Fork보다 **새 리포지토리를 만들고 템플릿 코드를 복사하는 것을 권장**합니다.
+> Fork 시 불필요한 워크플로우가 모두 활성화되어 혼란이 생길 수 있습니다.
 
 ```
-GitHub 웹에서 [Fork] 버튼 클릭
+GitHub 웹에서 [Use this template] 또는 새 리포 생성 후 필요한 파일 복사
 ```
 
-**2. Claude Code OAuth 토큰을 Secret으로 등록**
+**2. Claude Code GitHub App 설치**
+
+```
+1. https://github.com/apps/claude 방문
+2. "Install" 클릭 → 대상 리포지토리 선택
+```
+
+> GitHub Actions에서 Claude Code를 실행하려면 이 App이 반드시 설치되어 있어야 합니다.
+
+**3. Claude Code OAuth 토큰을 Secret으로 등록**
 
 ```
 Settings → Secrets and variables → Actions → New repository secret
@@ -88,7 +101,7 @@ Value: (Claude Code CLI에서 발급받은 OAuth 토큰)
 > OAuth 토큰 발급: Claude Code CLI 실행 → `/login` → 토큰 복사
 > API Key 대안: `ANTHROPIC_API_KEY` secret으로도 사용 가능
 
-**3. 워크플로우 실행**
+**4. 워크플로우 실행**
 
 ```
 Actions 탭 → "Step 1 - Hello Claude" 선택 → Run workflow
@@ -230,6 +243,28 @@ schedule:
 | [05. Advanced Patterns](./docs/05-advanced-patterns.md) | 고급 패턴 (PR 리뷰, 이슈 분류) |
 | [Troubleshooting](./docs/troubleshooting.md) | 자주 발생하는 문제 해결 |
 | [Cost Guide](./docs/cost-guide.md) | 비용 가이드 및 최적화 |
+
+---
+
+## ❓ FAQ
+
+**Q: Claude Pro에서도 사용 가능한가요?**
+A: 네. Claude Pro, Max 모두 OAuth 토큰을 발급받아 사용할 수 있습니다.
+
+**Q: Fork와 새 리포 생성 중 어떤 것이 좋나요?**
+A: 새 리포지토리를 만들어서 필요한 워크플로우 파일만 복사하는 것을 권장합니다. Fork 시 불필요한 워크플로우가 모두 활성화될 수 있습니다.
+
+**Q: Windows에서도 사용 가능한가요?**
+A: GitHub Actions는 클라우드에서 실행되므로 OS에 무관합니다. 다만 로컬에서 Claude Code CLI를 사용하려면 macOS/Linux 환경이 필요합니다.
+
+**Q: Actions 실행 시간 제한이 있나요?**
+A: Public repo는 무제한, Private repo는 월 2,000분입니다.
+
+**Q: 실행 결과는 어디서 확인하나요?**
+A: GitHub → Actions 탭에서 각 워크플로우 실행의 Step Summary에서 확인할 수 있습니다. 또한 git commit된 output/ 파일들로도 확인 가능합니다.
+
+**Q: Claude Code GitHub App은 뭔가요?**
+A: GitHub Actions에서 Claude Code를 실행하려면 필요한 GitHub App입니다. https://github.com/apps/claude 에서 설치하세요.
 
 ---
 

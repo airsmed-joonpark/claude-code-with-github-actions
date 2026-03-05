@@ -60,7 +60,7 @@ jobs:
             --mcp-config /tmp/mcp-config.json
             --dangerously-skip-permissions
 
-          direct_prompt: |
+          prompt: |
             You are an automated content pipeline orchestrator.
             You have access to Skills and Subagents defined in .claude/ directory.
 
@@ -98,3 +98,13 @@ jobs:
             - Include screenshot references
             - Keep content factual and useful
             - If any step fails, log the error and continue with remaining steps
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "## Claude Code Execution Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY

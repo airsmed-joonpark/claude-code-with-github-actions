@@ -35,7 +35,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           # The prompt to send to Claude Code
-          direct_prompt: ${{ github.event.inputs.prompt }}
+          prompt: ${{ github.event.inputs.prompt }}
 
           # Authentication: use ONE of the following
           # Option A: Anthropic API key (set ANTHROPIC_API_KEY in repo secrets)
@@ -48,3 +48,13 @@ jobs:
           # WARNING: This allows Claude to execute any tool without confirmation.
           # Only use in trusted CI environments with controlled prompts.
           allowed_tools: "Bash,Read,Write,Edit,Glob,Grep"
+
+      - name: Generate Step Summary
+        if: always()
+        run: |
+          echo "## Claude Code Execution Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- **Workflow**: ${{ github.workflow }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Trigger**: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Time**: $(date -u '+%Y-%m-%d %H:%M UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "- **Status**: ${{ job.status }}" >> $GITHUB_STEP_SUMMARY
