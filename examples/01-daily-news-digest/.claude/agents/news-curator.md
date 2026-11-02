@@ -8,6 +8,10 @@ tools:
   - Grep
   - Glob
   - WebSearch
+  - WebFetch
+  # MCP tools from the workflow's --mcp-config. Without these, --agent filters them out.
+  - mcp__chrome-devtools__*
+  - mcp__sequential-thinking__*
 model: sonnet
 ---
 

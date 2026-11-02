@@ -50,4 +50,4 @@ jobs:
           echo "| **브랜치** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **상태** | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "> Claude가 작성한 보고서는 이 요약 아래 «Claude Code Report» 섹션에 표시됩니다." >> $GITHUB_STEP_SUMMARY
+          echo "> Claude가 작성한 보고서는 이 표 위의 «Claude Code Report» 섹션에 표시됩니다." >> $GITHUB_STEP_SUMMARY
