@@ -1,0 +1,74 @@
+name: "ADV - Code change via /claude-nosign (git CLI, unsigned)"
+
+# Variant of adv-code-change.yml WITHOUT use_commit_signing: Claude commits/pushes with plain git CLI.
+# Used to compare branch creation timing and empty-branch cleanup.
+# Fires ONLY when a write-access user writes the custom trigger phrase "/claude-nosign"
+# in an issue/PR comment. It does not react to @claude.
+
+on:
+  issue_comment:
+    types: [created]
+
+concurrency:
+  # one run per issue/PR at a time; queue, do not cancel (a cancelled run leaves a half-updated comment)
+  group: adv-code-change-nosign-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  claude-dev:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '/claude-nosign') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) 
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -q pytest
+
+      - name: Run Claude (tag mode, custom trigger)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          trigger_phrase: "/claude-nosign"
+          branch_prefix: "adv-claude-ns/"
+          # Let Claude run the test suite; file edits + commits go through the action's signed-commit MCP tool.
+          claude_args: >-
+            --max-turns 30
+            --allowedTools "Bash(python -m pytest:*),Bash(pytest:*),Bash(python:*),Bash(ls:*),Bash(cat:*)"
+
+      - name: Show action outputs
+        if: always()
+        run: |
+          {
+            echo "## adv-code-change outputs"
+            echo "- conclusion: ${{ steps.claude.outputs.conclusion }}"
+            echo "- branch_name: ${{ steps.claude.outputs.branch_name }}"
+            echo "- session_id: ${{ steps.claude.outputs.session_id }}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "OUT_branch_name=${{ steps.claude.outputs.branch_name }}"
+          echo "OUT_conclusion=${{ steps.claude.outputs.conclusion }}"
+          f="${{ steps.claude.outputs.execution_file }}"
+          if [ -f "$f" ]; then
+            python3 -c "import json,sys; d=json.load(open(sys.argv[1])); r=[x for x in d if x.get('type')=='result']; print('OUT_cost', r[-1].get('total_cost_usd') if r else None, 'turns', r[-1].get('num_turns') if r else None)" "$f" || true
+          fi
+          git ls-remote --heads origin "adv-claude-ns/*" || true
+
+      - name: Upload execution file
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-code-change-nosign-exec-${{ github.run_id }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 3
