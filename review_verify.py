@@ -12,5 +12,5 @@ def last_n_items(items, n):
 
 def find_user(conn: sqlite3.Connection, username: str):
     """Look up one user row by username."""
-    query = "SELECT id, username, email FROM users WHERE username = '" + username + "'"
-    return conn.execute(query).fetchone()
+    query = "SELECT id, username, email FROM users WHERE username = ?"
+    return conn.execute(query, (username,)).fetchone()
