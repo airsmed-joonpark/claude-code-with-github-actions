@@ -12,3 +12,9 @@ def average(values):
 def top_n(values, n):
     """Return the n largest values, largest first."""
     return sorted(values)[:n]
+
+
+def median(values):
+    """Return the median of a non-empty list."""
+    s = sorted(values)
+    return s[len(s) // 2]
