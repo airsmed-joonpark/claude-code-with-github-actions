@@ -1,0 +1,11 @@
+{
+  "name": "adv-local",
+  "owner": { "name": "airsmed-joonpark" },
+  "plugins": [
+    {
+      "name": "adv-hello",
+      "source": "./plugins/adv-hello",
+      "description": "Demo plugin shipped inside the repo: one slash command + one bundled MCP server"
+    }
+  ]
+}

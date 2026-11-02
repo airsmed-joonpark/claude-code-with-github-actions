@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "adv-plugin-info": {
+      "command": "python",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/server.py"]
+    }
+  }
+}

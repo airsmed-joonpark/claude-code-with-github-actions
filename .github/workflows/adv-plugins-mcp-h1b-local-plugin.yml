@@ -1,0 +1,56 @@
+name: "ADV plugins-mcp H1b - repo-local plugin marketplace"
+
+# plugin_marketplaces accepts a LOCAL PATH (./...) as well as https://...git URLs.
+# adv_mcp/marketplace holds a marketplace "adv-local" with plugin "adv-hello":
+# a slash command (/adv-hello:adv-ping) + a bundled MCP server (${CLAUDE_PLUGIN_ROOT}/server.py).
+
+on:
+  workflow_dispatch:
+
+jobs:
+  local-plugin:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MCP server deps
+        run: python -m pip install -q -r adv_mcp/requirements.txt
+
+      - name: Run plugin command
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: |
+            ./adv_mcp/marketplace
+          plugins: |
+            adv-hello@adv-local
+          prompt: /adv-hello:adv-ping
+          claude_args: |
+            --model haiku
+            --max-turns 6
+
+      - name: Analyze execution file
+        if: always()
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ -f "$EXEC_FILE" ]; then python3 adv_mcp/analyze_exec.py "$EXEC_FILE" H1b | tee -a "$GITHUB_STEP_SUMMARY"; else echo "no execution file"; fi
+
+      - name: Upload execution file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-plugins-mcp-h1b-exec
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: ignore
