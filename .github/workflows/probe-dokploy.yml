@@ -1,0 +1,13 @@
+name: probe-dokploy
+on: workflow_dispatch
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: reach dokploy / app hosts from GitHub-hosted runner
+        run: |
+          for u in https://dokploy.us.axirsmed.com:8443/api/health https://ax-feedloop.us.axirsmed.com/healthz https://ax-api.us.axirsmed.com/_ax/public/gpt/v1/models; do
+            code=$(curl -s -o /dev/null -m 15 -w '%{http_code}' "$u" || echo "fail")
+            echo "$u -> $code"
+          done
