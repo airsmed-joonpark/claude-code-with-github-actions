@@ -146,7 +146,7 @@ jobs:
                  "| turns | \(.num_turns) |",
                  "| cost (USD) | \(.total_cost_usd) |",
                  "| models used | \((.modelUsage // {}) | keys | join(", ")) |",
-                 "| permission denials | \((.permission_denials // []) | length) |"' "$F" >> "$GITHUB_STEP_SUMMARY"
+                 "| permission denials | \((.permission_denials // []) | length) |"' "$F" | tee -a "$GITHUB_STEP_SUMMARY"
 
       # ── 5. Create GitHub Issue ──────────────────────────────
       - name: Create Health Report Issue

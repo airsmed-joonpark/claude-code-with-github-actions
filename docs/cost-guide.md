@@ -316,6 +316,8 @@ Claude Code를 자동화하는 세 가지 방법의 비용을 비교합니다.
           name: my-job
 ```
 
+표의 «models used»에는 지정한 모델 외에 `claude-haiku-*`가 함께 보일 때가 많습니다. CLI가 보조 작업에 쓰는 것이라 모델이 바뀐 것은 아닙니다. 예제 3종(`examples/`)은 `claude -p --output-format json` 결과로 표를 만들기 때문에 «호출한 도구» 줄이 없습니다.
+
 같은 job에서 Claude 단계를 두 번 실행하면 실행 파일이 같은 경로에 덮어써집니다. 각 Claude 단계 바로 뒤에 이 단계를 하나씩 두세요.
 
 ---
