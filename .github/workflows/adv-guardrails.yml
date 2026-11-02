@@ -5,6 +5,8 @@ name: "ADV - Guardrails (least privilege, cost, hooks)"
 #   b1          : --allowedTools / --disallowedTools whitelist (read-only repo summary + denied curl/rm)
 #   b1-probe    : only --allowedTools Read; does the repo's .claude/settings.json (allow: Bash) widen it?
 #   b1-iso      : same as b1-probe but --setting-sources user (ignore project settings)
+#   b1-ro       : which Bash commands pass with only --allowedTools Read (built-in read-only auto-approval)
+#   b1-tools    : same probe with --tools "Read,Glob,Grep" (Bash removed from the toolset)
 #   b2-haiku    : --model claude-haiku-5-5 --effort low (cheap model)
 #   b2-default  : same task, default model (cost comparison)
 #   b2-turns    : --max-turns 3 on a multi-step task (turn cap)
@@ -22,7 +24,7 @@ on:
         description: "Experiment to run"
         required: true
         type: choice
-        options: [b1, b1-probe, b1-iso, b2-haiku, b2-default, b2-turns, b2-budget, b2-fallback, b2-fallback-bad, b2-timeout, b3, b4]
+        options: [b1, b1-probe, b1-iso, b1-ro, b1-tools, b2-haiku, b2-default, b2-turns, b2-budget, b2-fallback, b2-fallback-bad, b2-timeout, b3, b4]
 
 permissions:
   contents: read
@@ -99,6 +101,12 @@ jobs:
             b1-iso)
               ARGS='--setting-sources user --allowedTools "Read"'
               PROMPT="Run these with Bash, one call each, and report output or denial verbatim: 1) whoami 2) wc -l README.md 3) touch probe.txt. Do not work around denials." ;;
+            b1-ro)
+              ARGS='--allowedTools "Read"'
+              PROMPT="Run these with Bash, one call each, and report output or denial verbatim, never work around denials: 1) printenv HOME 2) cat /etc/os-release | head -2 3) git status --short 4) git push --dry-run origin HEAD 5) curl -sI https://example.com 6) python3 -c \"print(1)\" 7) echo hi > probe.txt" ;;
+            b1-tools)
+              ARGS='--tools "Read,Glob,Grep"'
+              PROMPT="Run these with Bash, one call each, and report output or denial verbatim, never work around denials: 1) printenv HOME 2) cat /etc/os-release | head -2 3) git status --short 4) git push --dry-run origin HEAD 5) curl -sI https://example.com 6) python3 -c \"print(1)\" 7) echo hi > probe.txt" ;;
             b2-fallback-bad)
               ARGS='--model claude-does-not-exist-9 --fallback-model claude-haiku-5-5 --allowedTools "Read,Glob"'
               PROMPT="Reply with the single word OK." ;;
