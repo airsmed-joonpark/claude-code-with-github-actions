@@ -23,6 +23,6 @@ def display_name(user):
 def find_user(conn, username):
     """Look up a user row by username."""
     cur = conn.cursor()
-    query = "SELECT id, username, email FROM users WHERE username = '" + username + "'"
-    cur.execute(query)
+    query = "SELECT id, username, email FROM users WHERE username = ?"
+    cur.execute(query, (username,))
     return cur.fetchone()
