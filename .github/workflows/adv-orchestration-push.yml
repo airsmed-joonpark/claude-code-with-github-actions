@@ -17,7 +17,9 @@ on:
         default: false
 
 concurrency:
-  group: ${{ inputs.use_lock && 'adv-orchestration-push' || format('adv-orch-nolock-{0}', github.run_id) }}
+  # Group names are repo-wide: sharing one with another workflow means that
+  # workflow's pending run can cancel ours (one pending slot per group).
+  group: ${{ inputs.use_lock && 'adv-orchestration-pushtest' || format('adv-orch-nolock-{0}', github.run_id) }}
   cancel-in-progress: false
 
 permissions:
@@ -47,9 +49,16 @@ jobs:
       - name: Hold the stale checkout (widen the race window)
         run: sleep 20
       - name: Commit and push
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # claude-code-action rewires git auth to its own (revoked-at-exit) token,
+          # so a later shell push fails with "Invalid username or token".
+          # Re-point origin at this job's GITHUB_TOKEN.
+          git config --local --unset-all http.https://github.com/.extraheader || true
+          git remote set-url origin "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git"
           git add output/adv/push-${{ github.run_id }}.md
           git commit -m "adv-orchestration push test ${{ github.run_id }}"
           echo "push_at=$(date -u +%T)"

@@ -33,6 +33,9 @@ jobs:
 
       - name: Inspect session storage between steps
         run: |
+          # execution_file is a fixed path: turn 2 would overwrite it. Keep a copy.
+          mkdir -p exec && cp "${{ steps.first.outputs.execution_file }}" exec/turn1.json
+          echo "exec_file=${{ steps.first.outputs.execution_file }}"
           echo "session_id=${{ steps.first.outputs.session_id }}"
           ls -la ~/.claude/projects/ 2>/dev/null || echo "no ~/.claude/projects"
           find ~/.claude/projects -name "${{ steps.first.outputs.session_id }}*.jsonl" -printf '%p %s bytes\n' 2>/dev/null || true
@@ -54,7 +57,8 @@ jobs:
           ans=$(jq -r '[.[] | select(.type=="result")][-1].result' "$f")
           echo "answer: $ans"
           echo "session1=${{ steps.first.outputs.session_id }} session2=${{ steps.second.outputs.session_id }}"
-          for x in "${{ steps.first.outputs.execution_file }}" "$f"; do
+          jq -r '[.[] | select(.type=="result")][-1].result' exec/turn1.json | sed 's/^/turn1 answer: /'
+          for x in exec/turn1.json "$f"; do
             jq -r '[.[] | select(.type=="result")][-1] | "cost=\(.total_cost_usd) turns=\(.num_turns)"' "$x"
           done
           if echo "$ans" | grep -q "${{ steps.cw.outputs.word }}"; then echo "RESUME_OK"; else echo "::error::codeword not recalled"; exit 1; fi
@@ -63,7 +67,6 @@ jobs:
         if: always()
         run: |
           mkdir -p exec
-          cp "${{ steps.first.outputs.execution_file }}" exec/turn1.json 2>/dev/null || true
           cp "${{ steps.second.outputs.execution_file }}" exec/turn2.json 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
