@@ -1,0 +1,67 @@
+name: "ADV - Project config (skills / commands / agents / CLAUDE.md)"
+
+# Shows which project-level Claude Code config is honored when Claude runs in CI:
+#   .claude/skills/adv-release-notes/SKILL.md   (skill)
+#   .claude/commands/adv-changelog.md           (custom slash command)
+#   .claude/agents/adv-doc-checker.md           (subagent with limited tools)
+#   CLAUDE.md                                   (project memory / rules)
+#   .claude/settings.json                       (project permissions)
+# Manual trigger only. Pick a scenario; the execution file is uploaded as an artifact.
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "c1 skill | c2 slash command | c3 subagent | c4 / c4cmd same as c1/c2 with --setting-sources user | perms-proj / perms-user Bash permission from .claude/settings.json"
+        type: choice
+        default: c1
+        options: [c1, c2, c3, c4, c4cmd, perms-proj, perms-user]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 20   # release notes need history
+
+      - name: Pick prompt and args
+        id: pick
+        env:
+          SCENARIO: ${{ inputs.scenario }}
+        run: |
+          RN="Write release notes for the last 10 commits of this repository. Print them as your final answer. Do not create or modify any files."
+          CMD="/adv-changelog 5"
+          BASH_ONLY="Run the shell command 'git log --oneline -3' with the Bash tool and print its exact output. Do not use any other tool."
+          case "$SCENARIO" in
+            c1)         P="$RN";  A="--max-turns 12" ;;
+            c2)         P="$CMD"; A="--max-turns 8" ;;
+            c3)         P="Delegate a documentation check of README.md and docs/FAQ.md to the adv-doc-checker subagent (use the Task/Agent tool with that subagent type). Do not check the files yourself. Then print the subagent's report as your final answer."; A="--max-turns 10" ;;
+            c4)         P="$RN";  A="--max-turns 12 --setting-sources user --allowedTools Bash,Read,Grep,Glob,Skill" ;;
+            c4cmd)      P="$CMD"; A="--max-turns 8 --setting-sources user --allowedTools Bash,Read,Grep,Glob,Skill" ;;
+            perms-proj) P="$BASH_ONLY"; A="--max-turns 4" ;;
+            perms-user) P="$BASH_ONLY"; A="--max-turns 4 --setting-sources user" ;;
+          esac
+          { echo "prompt<<EOF_P"; echo "$P"; echo "EOF_P"; echo "args=$A"; } >> "$GITHUB_OUTPUT"
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # No --dangerously-skip-permissions on purpose: permissions come from .claude/settings.json
+          # (unless --setting-sources excludes "project").
+          claude_args: ${{ steps.pick.outputs.args }}
+          prompt: ${{ steps.pick.outputs.prompt }}
+          display_report: "true"
+
+      - name: Upload execution file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-project-config-${{ inputs.scenario }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: warn
