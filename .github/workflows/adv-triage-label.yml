@@ -1,0 +1,41 @@
+name: "ADV - Triage on label (tag mode, label_trigger)"
+
+# Add the label "claude-triage" to an issue -> Claude (tag mode) replies in the thread.
+# Fires ONLY for that exact label; the job-level `if` keeps every other label event from starting a runner.
+
+on:
+  issues:
+    types: [labeled]
+
+jobs:
+  label-triage:
+    if: github.event.label.name == 'claude-triage'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Claude (tag mode via label_trigger)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          label_trigger: "claude-triage"
+          claude_args: |
+            --max-turns 8
+            --append-system-prompt "You were invoked because a maintainer added the claude-triage label. Triage the issue: restate the problem, suggest type/priority, list missing information, and propose next steps. Do not modify files or open PRs. Reply in Korean."
+            --disallowedTools Edit,Write,NotebookEdit,WebFetch,WebSearch
+
+      - name: Upload execution file
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-triage-label-exec-${{ github.event.issue.number }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 3
