@@ -64,11 +64,14 @@ jobs:
 
           # --tools is a hard whitelist of available tools (StructuredOutput is added by --json-schema).
           # --allowedTools only auto-approves; it does NOT remove Task/Skill/Workflow/RemoteTrigger etc.
+          # --setting-sources user: ignore repo CLAUDE.md / .claude/settings.json so project rules
+          # (e.g. "end every report with a footer") cannot leak into structured fields.
           claude_args: |
             --json-schema '{"type":"object","additionalProperties":false,"required":["type","priority","labels","summary","needs_more_info"],"properties":{"type":{"type":"string","enum":["bug","feature","question","docs"]},"priority":{"type":"string","enum":["p0","p1","p2","p3"]},"labels":{"type":"array","maxItems":3,"items":{"type":"string","enum":["area:workflows","area:mcp","area:docs","area:auth","area:scheduling","area:security"]}},"summary":{"type":"string","maxLength":600},"needs_more_info":{"type":"boolean"},"missing_info":{"type":"array","maxItems":5,"items":{"type":"string","maxLength":200}}}}'
             --tools Read,Glob,Grep
             --max-turns 6
             --max-budget-usd 0.50
+            --setting-sources user
 
       - name: Upload execution file
         if: always() && steps.claude.outputs.execution_file != ''
