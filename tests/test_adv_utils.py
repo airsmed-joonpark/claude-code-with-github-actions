@@ -21,3 +21,8 @@ def test_slugify_unicode_accents():
 
 def test_slugify_empty():
     assert slugify("") == ""
+
+
+def test_slugify_whitespace_only():
+    assert slugify("   ") == ""
+    assert slugify("\t\n  \r\n") == ""
