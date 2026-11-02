@@ -32,8 +32,10 @@ jobs:
             https://github.com/anthropics/claude-plugins-official.git
           plugins: |
             code-review@claude-plugins-official
+          # NOTE: plain "/code-review" resolves to Claude Code's BUILT-IN code-review skill
+          # (CLI >= 2.1.x). Use the namespaced plugin command "/<plugin>:<command>".
           prompt: |
-            /code-review --comment
+            /code-review:code-review --comment
             Repository: ${{ github.repository }}  PR number: ${{ github.event.pull_request.number }}
           claude_args: |
             --max-budget-usd 6
