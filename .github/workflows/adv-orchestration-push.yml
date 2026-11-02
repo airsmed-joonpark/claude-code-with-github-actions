@@ -1,0 +1,67 @@
+name: "ADV - Orchestration (push concurrency)"
+
+# G3: two near-simultaneous dispatches both push to main.
+#   use_lock=true  -> shared concurrency group: the 2nd run waits (pending).
+#   use_lock=false -> per-run group (no lock): shows the race.
+#   retry=true     -> pull --rebase + push retry loop (works without the lock).
+# Note: a concurrency group holds at most 1 running + 1 pending run; a 3rd
+# dispatch replaces (cancels) the pending one.
+on:
+  workflow_dispatch:
+    inputs:
+      use_lock:
+        type: boolean
+        default: true
+      retry:
+        type: boolean
+        default: false
+
+concurrency:
+  group: ${{ inputs.use_lock && 'adv-orchestration-push' || format('adv-orch-nolock-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compute date
+        run: echo "DATE=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_ENV"
+      - name: Claude writes a file
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model haiku --max-turns 3 --allowedTools Write"
+          prompt: |
+            Use the Write tool to create output/adv/push-${{ github.run_id }}.md containing
+            one line: "push test ${{ github.run_id }} on ${{ env.DATE }} lock=${{ inputs.use_lock }}".
+            Do not run git.
+      - name: Hold the stale checkout (widen the race window)
+        run: sleep 20
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add output/adv/push-${{ github.run_id }}.md
+          git commit -m "adv-orchestration push test ${{ github.run_id }}"
+          echo "push_at=$(date -u +%T)"
+          if [ "${{ inputs.retry }}" = "true" ]; then
+            for i in 1 2 3 4 5; do
+              if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+              sleep $((i*3))
+            done
+            exit 1
+          else
+            git push origin HEAD:main
+          fi
+      - name: Cost
+        if: always()
+        run: jq -r '[.[] | select(.type=="result")][-1] | "cost=\(.total_cost_usd) turns=\(.num_turns)"' "${{ steps.claude.outputs.execution_file }}" || true

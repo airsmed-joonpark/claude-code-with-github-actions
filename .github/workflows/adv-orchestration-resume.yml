@@ -1,0 +1,73 @@
+name: "ADV - Orchestration (session resume)"
+
+# G2: step 1 runs Claude and exposes outputs.session_id; step 2 runs Claude
+# again with --resume <session_id>. The codeword appears only in step 1's prompt.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  resume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make codeword
+        id: cw
+        run: echo "word=HERON-$(openssl rand -hex 3 | tr a-f A-F)" >> "$GITHUB_OUTPUT"
+
+      - name: Claude turn 1
+        id: first
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model sonnet --max-turns 2"
+          prompt: |
+            Remember this for later: the release codeword is ${{ steps.cw.outputs.word }}
+            and the release owner is "Mina". Do not use any tools. Reply with just "noted".
+
+      - name: Inspect session storage between steps
+        run: |
+          echo "session_id=${{ steps.first.outputs.session_id }}"
+          ls -la ~/.claude/projects/ 2>/dev/null || echo "no ~/.claude/projects"
+          find ~/.claude/projects -name "${{ steps.first.outputs.session_id }}*.jsonl" -printf '%p %s bytes\n' 2>/dev/null || true
+
+      - name: Claude turn 2 (resume)
+        id: second
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--model sonnet --max-turns 2 --resume ${{ steps.first.outputs.session_id }}"
+          prompt: |
+            What were the release codeword and the release owner I gave you earlier?
+            Do not use any tools. Answer in one line as: CODEWORD=<value> OWNER=<value>.
+            If you do not know, answer UNKNOWN.
+
+      - name: Verify follow-up used earlier context
+        run: |
+          f="${{ steps.second.outputs.execution_file }}"
+          ans=$(jq -r '[.[] | select(.type=="result")][-1].result' "$f")
+          echo "answer: $ans"
+          echo "session1=${{ steps.first.outputs.session_id }} session2=${{ steps.second.outputs.session_id }}"
+          for x in "${{ steps.first.outputs.execution_file }}" "$f"; do
+            jq -r '[.[] | select(.type=="result")][-1] | "cost=\(.total_cost_usd) turns=\(.num_turns)"' "$x"
+          done
+          if echo "$ans" | grep -q "${{ steps.cw.outputs.word }}"; then echo "RESUME_OK"; else echo "::error::codeword not recalled"; exit 1; fi
+
+      - name: Collect execution files
+        if: always()
+        run: |
+          mkdir -p exec
+          cp "${{ steps.first.outputs.execution_file }}" exec/turn1.json 2>/dev/null || true
+          cp "${{ steps.second.outputs.execution_file }}" exec/turn2.json 2>/dev/null || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exec-resume
+          path: exec/
+          if-no-files-found: ignore

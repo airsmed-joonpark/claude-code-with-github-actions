@@ -1,0 +1,124 @@
+name: "ADV - Orchestration (matrix -> single push)"
+
+# G1: 3 topics run Claude in parallel matrix jobs. No job pushes on its own:
+# each uploads its file as an artifact, and ONE aggregate job commits once,
+# pushes with pull --rebase retry, and opens one digest issue.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  OUT_DIR: output/adv
+
+jobs:
+  write:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        topic: [git-rebase, github-actions-matrix, prompt-caching]
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fix for the template bug: the date is computed by the shell, not
+      # by asking Claude to expand "$(date ...)" inside the prompt.
+      - name: Compute date
+        run: echo "DATE=$(TZ=Asia/Seoul date +%Y-%m-%d)" >> "$GITHUB_ENV"
+
+      - name: Run Claude (write file only)
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: >-
+            --model sonnet
+            --max-turns 4
+            --allowedTools Write
+          prompt: |
+            Write a short markdown note (120-200 words) about "${{ matrix.topic }}"
+            for developers. Use the Write tool to save it to exactly this path:
+            ${{ env.OUT_DIR }}/${{ matrix.topic }}-${{ env.DATE }}.md
+            The first line must be: "# ${{ matrix.topic }} (${{ env.DATE }})".
+            Do not run git. Do not create any other file.
+
+      - name: Check file and cost
+        run: |
+          f="$OUT_DIR/${{ matrix.topic }}-$DATE.md"
+          test -s "$f" || { echo "::error::missing $f"; exit 1; }
+          head -1 "$f"
+          x="${{ steps.claude.outputs.execution_file }}"
+          cost=$(jq -r '[.[] | select(.type=="result")][-1].total_cost_usd // "n/a"' "$x")
+          turns=$(jq -r '[.[] | select(.type=="result")][-1].num_turns // "n/a"' "$x")
+          echo "cost=$cost turns=$turns"
+          echo "${{ matrix.topic }} | $cost | $turns" > "$OUT_DIR/cost-${{ matrix.topic }}.txt"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: note-${{ matrix.topic }}
+          path: |
+            ${{ env.OUT_DIR }}/${{ matrix.topic }}-${{ env.DATE }}.md
+            ${{ env.OUT_DIR }}/cost-${{ matrix.topic }}.txt
+          if-no-files-found: error
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exec-${{ matrix.topic }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: ignore
+
+  aggregate:
+    needs: write
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      issues: write
+    concurrency:
+      group: adv-orchestration-push
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: note-*
+          path: notes
+          merge-multiple: true
+      - name: Commit once, push with retry
+        run: |
+          set -e
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ls -la notes
+          mkdir -p "$OUT_DIR"
+          cp notes/*.md "$OUT_DIR"/
+          git add "$OUT_DIR"/*.md
+          if git diff --cached --quiet; then echo "nothing to commit"; exit 0; fi
+          git commit -m "adv-orchestration: digest $(TZ=Asia/Seoul date +%F) (run ${{ github.run_id }})"
+          for i in 1 2 3 4 5; do
+            if git pull --rebase origin main && git push origin HEAD:main; then exit 0; fi
+            echo "push attempt $i failed; retrying"; sleep $((i*5))
+          done
+          exit 1
+      - name: Open digest issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            echo
+            echo "| topic | cost_usd | turns |"
+            echo "|---|---|---|"
+            sed 's/^/| /; s/$/ |/' notes/cost-*.txt
+            echo
+            for f in notes/*.md; do echo "- \`$OUT_DIR/$(basename "$f")\`: $(head -1 "$f")"; done
+          } > body.md
+          gh issue create -R "${{ github.repository }}" --title "[adv-orchestration] digest" --body-file body.md
