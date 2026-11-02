@@ -61,11 +61,14 @@ jobs:
             - needs_more_info: true if a maintainer cannot act without asking for details
               (missing repro steps, logs, versions, or the request is vague).
             - summary: 1-2 sentences in Korean.
+
+          # --tools is a hard whitelist of available tools (StructuredOutput is added by --json-schema).
+          # --allowedTools only auto-approves; it does NOT remove Task/Skill/Workflow/RemoteTrigger etc.
           claude_args: |
             --json-schema '{"type":"object","additionalProperties":false,"required":["type","priority","labels","summary","needs_more_info"],"properties":{"type":{"type":"string","enum":["bug","feature","question","docs"]},"priority":{"type":"string","enum":["p0","p1","p2","p3"]},"labels":{"type":"array","maxItems":3,"items":{"type":"string","enum":["area:workflows","area:mcp","area:docs","area:auth","area:scheduling","area:security"]}},"summary":{"type":"string","maxLength":600},"needs_more_info":{"type":"boolean"},"missing_info":{"type":"array","maxItems":5,"items":{"type":"string","maxLength":200}}}}'
-            --allowedTools Read,Glob,Grep
-            --disallowedTools Bash,Edit,Write,WebFetch,WebSearch,NotebookEdit
+            --tools Read,Glob,Grep
             --max-turns 6
+            --max-budget-usd 0.50
 
       - name: Upload execution file
         if: always() && steps.claude.outputs.execution_file != ''
