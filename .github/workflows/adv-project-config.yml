@@ -15,7 +15,7 @@ on:
         description: "c1 skill | c1b c1 + --allowedTools Skill | c1s c1 + settings input | c2 slash command | c3 subagent | c4 / c4cmd = c1/c2 with --setting-sources user | perms-* = which permission source lets a write-ish Bash command run"
         type: choice
         default: c1b
-        options: [c1, c1b, c1s, c2, c3, c4, c4cmd, perms-proj, perms-user, perms2-proj, perms2-user, perms2-settings, perms2-scoped]
+        options: [c1, c1b, c1s, c2, c3, c4, c4cmd, perms-proj, perms-user, perms2-proj, perms2-user, perms2-settings, perms2-scoped, perms3, perms3-user]
 
 jobs:
   run:
@@ -37,6 +37,7 @@ jobs:
           CMD="/adv-changelog 5"
           WRITE_CMD="Run exactly this one Bash command: touch /tmp/adv-perm-ok && echo PERM_OK . Print its output. If the command is denied, answer only DENIED. Do not try alternatives or other tools."
           S=""
+          INCWD_CMD="Run exactly this one Bash command: mkdir -p adv-perm-out && touch adv-perm-out/ok && echo PERM_OK . Print its output. If the command is denied, answer only DENIED. Do not try alternatives or other tools."
           BASH_ONLY="Run the shell command 'git log --oneline -3' with the Bash tool and print its exact output. Do not use any other tool."
           case "$SCENARIO" in
             c1)         P="$RN";  A="--max-turns 12" ;;
@@ -48,6 +49,8 @@ jobs:
             c4cmd)      P="$CMD"; A="--max-turns 8 --setting-sources user --allowedTools Bash,Read,Grep,Glob,Skill" ;;
             perms-proj) P="$BASH_ONLY"; A="--max-turns 4" ;;
             perms-user) P="$BASH_ONLY"; A="--max-turns 4 --setting-sources user" ;;
+            perms3)          P="$INCWD_CMD"; A="--max-turns 4" ;;
+            perms3-user)     P="$INCWD_CMD"; A="--max-turns 4 --setting-sources user" ;;
             perms2-proj)     P="$WRITE_CMD"; A="--max-turns 4" ;;
             perms2-user)     P="$WRITE_CMD"; A="--max-turns 4 --setting-sources user" ;;
             perms2-settings) P="$WRITE_CMD"; A="--max-turns 4 --setting-sources user"; S='{"permissions":{"allow":["Bash"]}}' ;;
@@ -73,6 +76,7 @@ jobs:
         run: |
           echo "--- ~/.claude/settings.json (user source, written by the action's settings input)"; cat ~/.claude/settings.json 2>/dev/null || echo "(none)"
           echo "--- .claude/settings.json (project source)"; cat .claude/settings.json 2>/dev/null || echo "(none)"
+          if [ -f adv-perm-out/ok ]; then echo "PERM_CHECK3: adv-perm-out/ok exists"; else echo "PERM_CHECK3: adv-perm-out/ok missing"; fi
           if [ -f /tmp/adv-perm-ok ]; then echo "PERM_CHECK: /tmp/adv-perm-ok exists (Bash write command ran)"; else echo "PERM_CHECK: /tmp/adv-perm-ok missing"; fi
 
       - name: Upload execution file
