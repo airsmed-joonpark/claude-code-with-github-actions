@@ -4,7 +4,9 @@ name: "Step 1 - Hello Claude"
 # https://github.com/apps/claude
 
 # The simplest possible Claude Code workflow.
-# Just fork, add your CLAUDE_CODE_OAUTH_TOKEN secret, and run!
+# Add your CLAUDE_CODE_OAUTH_TOKEN secret, then either:
+#   - run it from the Actions tab (Claude analyzes the repo, result appears in the run summary), or
+#   - mention @claude in an issue, issue comment, or PR review comment (Claude replies in the thread).
 
 on:
   # Manual trigger from GitHub Actions UI
@@ -18,18 +20,23 @@ on:
   pull_request_review_comment:
     types: [created]
 
-  # Respond when a new issue is opened
+  # Respond when a new issue mentioning @claude is opened
   issues:
     types: [opened]
 
 jobs:
   hello-claude:
-    # Only run if manually triggered or @claude is mentioned
+    # Run on manual trigger, or when @claude is mentioned by someone with write access.
+    # The author_association check keeps outsiders on a public repo from starting runs at all.
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      github.event_name == 'issues'
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude') &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association)) ||
+      (github.event_name == 'issues' &&
+        (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
+        contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -42,19 +49,27 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Run Claude Code
+      # Manual run: a fixed prompt (agent mode). The answer is shown in the run's Summary page.
+      - name: Run Claude Code (manual)
+        if: github.event_name == 'workflow_dispatch'
         uses: anthropics/claude-code-action@v1
         with:
-          # Use Claude Max OAuth token (unlimited usage)
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-
-          # Skip all permission prompts (safe in isolated Actions environment)
           claude_args: "--dangerously-skip-permissions"
-
-          # For workflow_dispatch, provide a default prompt
+          display_report: "true"
           prompt: |
             Analyze this repository structure and suggest improvements.
             Be concise and helpful.
+
+      # @claude mention: no prompt input, so the action uses tag mode.
+      # Claude reads the issue/comment text and replies in the same thread.
+      # (Setting `prompt:` here would force agent mode and Claude would ignore the comment.)
+      - name: Run Claude Code (@claude mention)
+        if: github.event_name != 'workflow_dispatch'
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: "--dangerously-skip-permissions"
 
       - name: Generate Step Summary
         if: always()

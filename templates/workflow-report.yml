@@ -19,6 +19,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           claude_args: "--dangerously-skip-permissions"
+          # Show Claude's report on the run Summary page (claude-code-action@v1 has no `result` output)
+          display_report: "true"
           prompt: |
             이 리포지토리의 GitHub Actions 워크플로우들을 분석하고 실행 보고서를 작성해주세요.
 
@@ -48,10 +50,4 @@ jobs:
           echo "| **브랜치** | ${{ github.ref_name }} |" >> $GITHUB_STEP_SUMMARY
           echo "| **상태** | ${{ job.status }} |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### Claude Code 분석 결과" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ -n "${{ steps.claude.outputs.result }}" ]; then
-            echo "${{ steps.claude.outputs.result }}" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "_Claude Code 실행 결과가 없거나 실패했습니다._" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "> Claude가 작성한 보고서는 이 요약 아래 «Claude Code Report» 섹션에 표시됩니다." >> $GITHUB_STEP_SUMMARY

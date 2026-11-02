@@ -19,7 +19,8 @@ permissions:
   contents: write
 
 env:
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # Claude Code CLI reads this token (issue one with `claude setup-token`)
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
 jobs:
   generate-content:
@@ -70,49 +71,41 @@ jobs:
             sleep 1
           done
 
-      # ── 6. Install MCP Servers ─────────────────────────────
-      - name: Install MCP Servers
-        run: |
-          npm install -g \
-            @anthropic-ai/claude-code-mcp-server-fetch@latest \
-            @anthropic-ai/claude-code-mcp-server-sequential-thinking@latest
-
-      # ── 7. Configure MCP ───────────────────────────────────
+      # ── MCP servers ────────────────────────────────────────
+      # Packages are fetched by npx at start-up. The config file is passed to
+      # claude with --mcp-config (a file under ~/.claude is not picked up).
+      # For web fetching, Claude's built-in WebFetch tool is used instead of a fetch MCP server.
       - name: Configure MCP Servers
         run: |
-          mkdir -p ~/.claude
-          cat > ~/.claude/mcp_servers.json << 'EOF'
+          cat > "$RUNNER_TEMP/mcp-config.json" << 'EOF'
           {
             "mcpServers": {
               "sequential-thinking": {
                 "command": "npx",
-                "args": ["-y", "@anthropic-ai/claude-code-mcp-server-sequential-thinking"]
-              },
-              "fetch": {
-                "command": "npx",
-                "args": ["-y", "@anthropic-ai/claude-code-mcp-server-fetch"]
+                "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
               },
               "chrome-devtools": {
                 "command": "npx",
-                "args": ["-y", "@anthropic-ai/claude-code-mcp-server-chrome-devtools@latest"],
-                "env": {
-                  "CDP_ENDPOINT": "http://localhost:9222"
-                }
+                "args": ["-y", "chrome-devtools-mcp@latest", "--browser-url=http://127.0.0.1:9222"]
               }
             }
           }
           EOF
+          cat "$RUNNER_TEMP/mcp-config.json"
 
       # ── 8. Run Claude Code ─────────────────────────────────
       - name: Generate Vocabulary Content
+        env:
+          # Inputs go through env, not inline ${{ }}, so they can't inject shell code
+          WORD_COUNT: ${{ github.event.inputs.word_count || '10' }}
+          DIFFICULTY: ${{ github.event.inputs.difficulty || 'intermediate' }}
         run: |
           TIMESTAMP=$(date -u +%Y-%m-%d-%H)
-          WORD_COUNT="${{ github.event.inputs.word_count || '10' }}"
-          DIFFICULTY="${{ github.event.inputs.difficulty || 'intermediate' }}"
 
           claude -p \
             --dangerously-skip-permissions \
-            --allowedTools "mcp__chrome-devtools__*,mcp__fetch__*,mcp__sequential-thinking__*,Read,Write,Bash,Glob,Grep" \
+            --mcp-config "$RUNNER_TEMP/mcp-config.json" \
+            --allowedTools "mcp__chrome-devtools__*,mcp__sequential-thinking__*,WebFetch,WebSearch,Read,Write,Bash,Glob,Grep" \
             --agent content-specialist \
             "Generate vocabulary learning content. Timestamp: ${TIMESTAMP}. Word count: ${WORD_COUNT}. Difficulty: ${DIFFICULTY}.
 

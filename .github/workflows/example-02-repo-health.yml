@@ -1,10 +1,9 @@
+# QA copy of examples/02-repo-health-checker/.github/workflows/repo-health.yml, run from the repo root.
+# Claude runs inside examples/02-repo-health-checker so it finds that folder's .claude/ agents and skills.
 name: Weekly Repo Health Check
 
 on:
-  # QA copy: schedule disabled (dispatch only). Original: examples/02-repo-health-checker/.github/workflows/repo-health.yml
-  # schedule:
-  #   # Run every Monday at 9 AM UTC
-  #   - cron: '0 9 * * 1'
+  # schedule: disabled in this QA copy (dispatch only)
   workflow_dispatch:
 
 permissions:
@@ -12,7 +11,8 @@ permissions:
   issues: write
 
 env:
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # Claude Code CLI reads this token (issue one with `claude setup-token`)
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
 jobs:
   health-check:
@@ -133,6 +133,10 @@ jobs:
           else
             REPORT="Health check completed but no report file was generated. Check the workflow logs for details."
           fi
+
+          # Labels must exist before gh issue create can use them
+          gh label create maintenance --color FBCA04 --force
+          gh label create automated --color 0E8A16 --force
 
           gh issue create \
             --title "Repository Health Report - ${DATE}" \

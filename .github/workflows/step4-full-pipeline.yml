@@ -40,10 +40,6 @@ jobs:
                 "command": "npx",
                 "args": ["-y", "@modelcontextprotocol/server-sequential-thinking"]
               },
-              "fetch": {
-                "command": "npx",
-                "args": ["-y", "@anthropics/mcp-server-fetch"]
-              },
               "chrome-devtools": {
                 "command": "npx",
                 "args": ["-y", "chrome-devtools-mcp@latest", "--headless"]
@@ -53,9 +49,11 @@ jobs:
           MCPEOF
 
       - name: Run Claude Code Full Pipeline
+        id: claude
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          display_report: "true"
           claude_args: |
             --mcp-config /tmp/mcp-config.json
             --dangerously-skip-permissions
@@ -98,6 +96,19 @@ jobs:
             - Include screenshot references
             - Keep content factual and useful
             - If any step fails, log the error and continue with remaining steps
+
+      # Show which MCP servers actually connected (they fail silently otherwise)
+      - name: Show MCP server status
+        if: always()
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          echo "### MCP servers" >> $GITHUB_STEP_SUMMARY
+          if [ -f "$EXEC_FILE" ]; then
+            jq -r '(if type=="array" then .[] else . end) | select(.type=="system" and .subtype=="init") | .mcp_servers[]? | "- \(.name): \(.status)"' "$EXEC_FILE" | tee -a $GITHUB_STEP_SUMMARY
+          else
+            echo "- execution file not found" | tee -a $GITHUB_STEP_SUMMARY
+          fi
 
       - name: Generate Step Summary
         if: always()

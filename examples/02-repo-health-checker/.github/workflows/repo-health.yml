@@ -11,7 +11,8 @@ permissions:
   issues: write
 
 env:
-  ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  # Claude Code CLI reads this token (issue one with `claude setup-token`)
+  CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
 jobs:
   health-check:
@@ -131,6 +132,10 @@ jobs:
           else
             REPORT="Health check completed but no report file was generated. Check the workflow logs for details."
           fi
+
+          # Labels must exist before gh issue create can use them
+          gh label create maintenance --color FBCA04 --force
+          gh label create automated --color 0E8A16 --force
 
           gh issue create \
             --title "Repository Health Report - ${DATE}" \
