@@ -10,8 +10,11 @@ on:
     types: [created]
 
 concurrency:
-  # one run per issue/PR at a time; queue, do not cancel (a cancelled run leaves a half-updated comment)
-  group: adv-code-change-nosign-${{ github.event.issue.number }}
+  # Serialize real runs per issue/PR, but give every non-trigger event its own group.
+  # Workflow-level concurrency is evaluated BEFORE the job `if:`. GitHub keeps only one
+  # pending run per group, so with a shared key an unrelated comment on the same issue
+  # cancels a queued real run (observed: run 41437699900 cancelled with 0 jobs).
+  group: ${{ contains(github.event_name == 'issue_comment' && github.event.comment.body || format('{0} {1}', github.event.issue.title, github.event.issue.body), '/claude-nosign') && format('adv-code-change-nosign-{0}', github.event.issue.number) || format('adv-code-change-nosign-noop-{0}', github.run_id) }}
   cancel-in-progress: false
 
 jobs:
