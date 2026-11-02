@@ -6,6 +6,7 @@ on:
 jobs:
   generate-report:
     runs-on: ubuntu-latest
+    timeout-minutes: 15   # last-resort cap; a cancelled job leaves no run report
     permissions:
       contents: read
       issues: write
@@ -18,7 +19,8 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--dangerously-skip-permissions"
+          # Cost guards: stop after N turns or about $X
+          claude_args: "--dangerously-skip-permissions --max-turns 15 --max-budget-usd 1"
           # Show Claude's report on the run Summary page (claude-code-action@v1 has no `result` output)
           display_report: "true"
           prompt: |
@@ -32,6 +34,14 @@ jobs:
             5. 개선 제안사항
 
             보고서를 마크다운 형식으로 작성하세요.
+
+      # Run report: model, turns, cost, tools called, denials -> job summary + artifact
+      - name: Claude run report
+        if: always()
+        uses: ./.github/actions/claude-run-report
+        with:
+          execution_file: ${{ steps.claude.outputs.execution_file }}
+          name: report
 
       - name: Generate Step Summary
         if: always()

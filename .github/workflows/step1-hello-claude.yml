@@ -38,6 +38,7 @@ jobs:
         (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')) &&
         contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.issue.author_association))
     runs-on: ubuntu-latest
+    timeout-minutes: 20   # last-resort cap; a cancelled job leaves no run report
     permissions:
       contents: read
       issues: write
@@ -51,11 +52,13 @@ jobs:
 
       # Manual run: a fixed prompt (agent mode). The answer is shown in the run's Summary page.
       - name: Run Claude Code (manual)
+        id: claude_manual
         if: github.event_name == 'workflow_dispatch'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--dangerously-skip-permissions"
+          # Cost guards: stop after N turns or about $X (checked after each turn)
+          claude_args: "--dangerously-skip-permissions --max-turns 15 --max-budget-usd 1"
           display_report: "true"
           prompt: |
             Analyze this repository structure and suggest improvements.
@@ -65,11 +68,20 @@ jobs:
       # Claude reads the issue/comment text and replies in the same thread.
       # (Setting `prompt:` here would force agent mode and Claude would ignore the comment.)
       - name: Run Claude Code (@claude mention)
+        id: claude_mention
         if: github.event_name != 'workflow_dispatch'
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          claude_args: "--dangerously-skip-permissions"
+          claude_args: "--dangerously-skip-permissions --max-turns 30 --max-budget-usd 2"
+
+      # Run report: model, turns, cost, tools called, denials -> job summary + artifact
+      - name: Claude run report
+        if: always()
+        uses: ./.github/actions/claude-run-report
+        with:
+          execution_file: ${{ steps.claude_manual.outputs.execution_file || steps.claude_mention.outputs.execution_file }}
+          name: step1
 
       - name: Generate Step Summary
         if: always()

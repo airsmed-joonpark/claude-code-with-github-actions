@@ -1,0 +1,56 @@
+name: "Claude run report"
+description: >
+  Uploads the claude-code-action execution file as an artifact and writes a short
+  run report (model, turns, cost, tools used, permission denials, stop reason) to the
+  job summary. A green check alone does not tell you what Claude actually did.
+
+inputs:
+  execution_file:
+    description: "Path from steps.<id>.outputs.execution_file (empty is fine: the default path is tried)"
+    required: false
+    default: ""
+  name:
+    description: "Short label, used in the artifact name and the summary heading"
+    required: false
+    default: "claude"
+  retention-days:
+    description: "Artifact retention"
+    required: false
+    default: "7"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Locate execution file
+      id: locate
+      shell: bash
+      env:
+        GIVEN: ${{ inputs.execution_file }}
+      run: |
+        # The action always writes to the same path, so a second Claude step in the same
+        # job overwrites the first one. Copy it right away under a unique name.
+        SRC="$GIVEN"
+        [ -f "$SRC" ] || SRC="$RUNNER_TEMP/claude-execution-output.json"
+        if [ -f "$SRC" ]; then
+          DEST="$RUNNER_TEMP/claude-run-report/${{ inputs.name }}.json"
+          mkdir -p "$(dirname "$DEST")"
+          cp "$SRC" "$DEST"
+          echo "file=$DEST" >> "$GITHUB_OUTPUT"
+        else
+          echo "file=" >> "$GITHUB_OUTPUT"
+          echo "### Claude run report: ${{ inputs.name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "No execution file. Claude did not run, or the job was cancelled (for example by timeout-minutes)." >> "$GITHUB_STEP_SUMMARY"
+        fi
+
+    - name: Write run report
+      if: steps.locate.outputs.file != ''
+      shell: bash
+      run: python3 "${{ github.action_path }}/summarize.py" "${{ steps.locate.outputs.file }}" "${{ inputs.name }}" | tee -a "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload execution file
+      if: steps.locate.outputs.file != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: claude-execution-${{ github.job }}-${{ inputs.name }}
+        path: ${{ steps.locate.outputs.file }}
+        retention-days: ${{ inputs.retention-days }}

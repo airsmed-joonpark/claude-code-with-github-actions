@@ -11,6 +11,7 @@ Claude Code + GitHub Actions를 사용할 때 발생하는 비용을 상세히 �
 3. [워크플로우별 평균 비용](#3-워크플로우별-평균-비용)
 4. [최적화 팁](#4-최적화-팁)
 5. [비용 비교 테이블](#5-비용-비교-테이블)
+6. [템플릿 기본 비용 상한과 실행 기록](#6-템플릿-기본-비용-상한과-실행-기록)
 
 ---
 
@@ -282,6 +283,40 @@ Claude Code를 자동화하는 세 가지 방법의 비용을 비교합니다.
 | 로컬 데이터 처리 | 미니PC | 데이터 전송 불필요 |
 | 복잡한 자동화 파이프라인 | VPS | 환경 커스터마이징 자유 |
 | 학습/실습 | GitHub Actions | 설정이 가장 간편 |
+
+---
+
+## 6. 템플릿 기본 비용 상한과 실행 기록
+
+모든 Step 워크플로에는 아래 세 가지 상한이 들어 있습니다.
+
+| 상한 | 예 | 걸리면 |
+|---|---|---|
+| `--max-turns N` | Step 1 수동 실행 15, `@claude` 응답 30, Step 4 50 | `error_max_turns`로 멈추고 Claude 단계가 실패로 표시됩니다 |
+| `--max-budget-usd X` | Step 1 1달러, Step 4 3달러 | `error_max_budget_usd`로 멈춥니다. 턴이 끝난 뒤 검사하므로 마지막 한 턴만큼 넘을 수 있습니다(실측 약 7%) |
+| `timeout-minutes` (job) | 15~30분 | job이 취소됩니다. 이때는 실행 기록과 비용이 남지 않으므로 마지막 안전장치로만 씁니다 |
+
+작업량이 많아 상한에 걸리면 값을 올리세요. OAuth 토큰으로 실행해도 `total_cost_usd`는 계산되며, 이 금액은 구독 사용량에서 차감됩니다.
+
+### 실행 기록 (Claude run report)
+
+모든 Step 워크플로는 마지막에 [`.github/actions/claude-run-report`](../.github/actions/claude-run-report/action.yml)를 실행합니다.
+
+- Actions 실행 페이지의 Summary에 멈춘 이유, 실제로 쓰인 모델, 턴 수, 비용, 호출한 도구, 권한 거부를 표로 남깁니다.
+- 실행 파일(execution file)을 아티팩트 `claude-execution-<job>-<이름>`으로 7일간 보관합니다.
+
+초록불만으로는 Claude가 무엇을 했는지 알 수 없습니다. 테스트에서 스킬 호출이 거부됐거나 MCP 서버가 연결되지 않았는데도 성공으로 끝난 경우가 있었고, 이 기록으로 찾아냈습니다. 다른 워크플로에 붙일 때는 Claude 단계에 `id:`를 주고 아래처럼 씁니다.
+
+```yaml
+      - name: Claude run report
+        if: always()
+        uses: ./.github/actions/claude-run-report
+        with:
+          execution_file: ${{ steps.claude.outputs.execution_file }}
+          name: my-job
+```
+
+같은 job에서 Claude 단계를 두 번 실행하면 실행 파일이 같은 경로에 덮어써집니다. 각 Claude 단계 바로 뒤에 이 단계를 하나씩 두세요.
 
 ---
 

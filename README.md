@@ -121,8 +121,13 @@ Actions 탭 → "Step 1 - Hello Claude" 선택 → Run workflow
 | **Step 2** | Scheduled Automation | cron으로 자동 실행 + git commit/push | ★★☆☆ | cron 표현식, git 자동화 패턴 |
 | **Step 3** | MCP Servers | Chrome DevTools로 웹 브라우징 자동화 | ★★★☆ | MCP 개념, Chrome 설정, 스크린샷 |
 | **Step 4** | Full Pipeline | Skills + Subagents 풀셋 파이프라인 | ★★★★ | Skills, Agents, 위임 패턴 |
+| **Step 5** | Issue Triage | 새 이슈를 분류해 라벨·댓글 자동 적용 | ★★☆☆ | `--json-schema` 구조화 출력, env로 결과 전달 |
+| **Step 6** | PR Auto Review | PR 줄 단위 리뷰, 푸시마다 요약 갱신 | ★★★☆ | 인라인 댓글, sticky 댓글, PR별 concurrency |
+| **Step 7** | CI Auto-fix | 테스트 실패 시 Claude가 코드 수정·커밋 | ★★★★ | `workflow_run`, 반복 실행 방지, 테스트 수정 금지 |
 
 각 Step의 상세 가이드는 [`docs/`](./docs/) 폴더에 있습니다.
+
+모든 Step 워크플로에는 비용 상한(`--max-turns`, `--max-budget-usd`, `timeout-minutes`)과 실행 기록 단계(`claude-run-report`)가 들어 있습니다. 실행 후 Actions의 Summary에서 모델·턴·비용·호출한 도구를 확인할 수 있습니다. 자세한 내용은 [비용 가이드](./docs/cost-guide.md#6-템플릿-기본-비용-상한과-실행-기록)를 보세요.
 
 ---
 
@@ -241,6 +246,9 @@ schedule:
 | [03. MCP Servers](./docs/03-mcp-servers.md) | Step 3: Chrome DevTools + MCP |
 | [04. Skills & Agents](./docs/04-skills-and-agents.md) | Step 4: Skills, Subagents 활용 |
 | [05. Advanced Patterns](./docs/05-advanced-patterns.md) | 고급 패턴 (PR 리뷰, 이슈 분류) |
+| [06. Issue Triage](./docs/06-issue-triage.md) | Step 5: 구조화 출력으로 이슈 분류 |
+| [07. PR Auto Review](./docs/07-pr-review.md) | Step 6: PR 자동 리뷰 |
+| [08. CI Auto-fix](./docs/08-ci-autofix.md) | Step 7: CI 실패 자동 수정 |
 | [Troubleshooting](./docs/troubleshooting.md) | 자주 발생하는 문제 해결 |
 | [Cost Guide](./docs/cost-guide.md) | 비용 가이드 및 최적화 |
 

@@ -105,6 +105,9 @@ jobs:
 
           claude -p \
             --dangerously-skip-permissions \
+            --output-format json \
+            --max-turns 40 \
+            --max-budget-usd 2 \
             --mcp-config "$RUNNER_TEMP/mcp-config.json" \
             --allowedTools "mcp__chrome-devtools__*,mcp__sequential-thinking__*,WebFetch,WebSearch,Read,Write,Bash,Glob,Grep" \
             --agent content-specialist \
@@ -163,7 +166,32 @@ jobs:
             \`.claude/skills/vocabulary-generator/assets/template.md\`
 
             Generate the final content following the template and save to:
-            \`output/${TIMESTAMP}-vocabulary.md\`"
+            \`output/${TIMESTAMP}-vocabulary.md\`" > "$RUNNER_TEMP/claude-result.json"
+          jq -r .result "$RUNNER_TEMP/claude-result.json"
+
+      # ── Run record ─────────────────────────────────────────
+      # The JSON result has the stop reason, turns, cost and permission denials.
+      - name: Upload Claude result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-result
+          path: ${{ runner.temp }}/claude-result.json
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Run report
+        if: always()
+        run: |
+          F="$RUNNER_TEMP/claude-result.json"
+          [ -f "$F" ] || { echo "No Claude result file." >> "$GITHUB_STEP_SUMMARY"; exit 0; }
+          jq -r '"### Claude run report",
+                 "| item | value |", "|---|---|",
+                 "| stop reason | \(.subtype) |",
+                 "| turns | \(.num_turns) |",
+                 "| cost (USD) | \(.total_cost_usd) |",
+                 "| models used | \((.modelUsage // {}) | keys | join(", ")) |",
+                 "| permission denials | \((.permission_denials // []) | length) |"' "$F" >> "$GITHUB_STEP_SUMMARY"
 
       # ── 9. Commit and Push ─────────────────────────────────
       - name: Commit and Push

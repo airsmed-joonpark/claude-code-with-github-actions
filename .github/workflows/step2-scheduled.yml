@@ -14,6 +14,7 @@ on:
 jobs:
   generate-content:
     runs-on: ubuntu-latest
+    timeout-minutes: 15   # last-resort cap; a cancelled job leaves no run report
     permissions:
       contents: write      # Needed for git push
       issues: write
@@ -30,7 +31,8 @@ jobs:
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           display_report: "true"
-          claude_args: "--dangerously-skip-permissions"
+          # Cost guards: a scheduled job runs unattended, so cap it
+          claude_args: "--dangerously-skip-permissions --max-turns 20 --max-budget-usd 1"
 
           # Fixed prompt for scheduled execution
           prompt: |
@@ -62,6 +64,14 @@ jobs:
             - Be factual and cite sources
             - Keep it concise and valuable
             - Ensure the markdown is well-formatted
+
+      # Run report: model, turns, cost, tools called, denials -> job summary + artifact
+      - name: Claude run report
+        if: always()
+        uses: ./.github/actions/claude-run-report
+        with:
+          execution_file: ${{ steps.claude.outputs.execution_file }}
+          name: step2
 
       - name: Generate Step Summary
         if: always()

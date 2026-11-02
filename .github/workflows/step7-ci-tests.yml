@@ -1,0 +1,28 @@
+name: "Step 7 - CI Tests"
+
+# Plain pytest CI for demo_app/. When it fails on a feature branch,
+# "Step 7 - CI Auto-fix" picks the failure up through workflow_run.
+
+on:
+  push:
+    paths: ["demo_app/**", ".github/workflows/step7-*.yml"]
+  pull_request:
+    paths: ["demo_app/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: python -m pip install --quiet pytest
+      - name: Run tests
+        run: python -m pytest demo_app -q

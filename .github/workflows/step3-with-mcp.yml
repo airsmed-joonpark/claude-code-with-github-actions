@@ -9,6 +9,7 @@ on:
 jobs:
   web-research:
     runs-on: ubuntu-latest
+    timeout-minutes: 30   # last-resort cap; a cancelled job leaves no run report
     permissions:
       contents: write
       issues: write
@@ -58,6 +59,8 @@ jobs:
           claude_args: |
             --mcp-config /tmp/mcp-config.json
             --dangerously-skip-permissions
+            --max-turns 40
+            --max-budget-usd 2
 
           prompt: |
             You are a web research agent with Chrome DevTools access.
@@ -100,6 +103,14 @@ jobs:
           else
             echo "- execution file not found" | tee -a $GITHUB_STEP_SUMMARY
           fi
+
+      # Run report: model, turns, cost, tools called, denials -> job summary + artifact
+      - name: Claude run report
+        if: always()
+        uses: ./.github/actions/claude-run-report
+        with:
+          execution_file: ${{ steps.claude.outputs.execution_file }}
+          name: step3
 
       - name: Generate Step Summary
         if: always()
