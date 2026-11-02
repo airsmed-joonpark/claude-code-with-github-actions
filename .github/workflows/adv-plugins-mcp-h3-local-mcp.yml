@@ -1,0 +1,90 @@
+name: "ADV plugins-mcp H3 - custom MCP server shipped in repo"
+
+# Registers adv_mcp/server.py (python, official `mcp` package) via --mcp-config.
+# Variants show a merge gotcha in claude-code-action:
+#   file             : --mcp-config <file path>                         (action adds no servers)
+#   file_plus_github : --mcp-config <file path> + mcp__github allowed   (action prepends inline JSON)
+#   inline_plus_github: --mcp-config '<inline JSON>' + mcp__github allowed
+
+on:
+  workflow_dispatch:
+    inputs:
+      variants:
+        description: 'JSON array of variants'
+        default: '["file","file_plus_github","inline_plus_github"]'
+
+jobs:
+  local-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(inputs.variants) }}
+    permissions:
+      contents: read
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MCP server deps
+        run: |
+          python -m pip install -q -r adv_mcp/requirements.txt
+          echo "PY_BIN=$(command -v python)" >> "$GITHUB_ENV"
+
+      - name: Build MCP config + claude_args
+        id: args
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          CFG=$(jq -nc --arg py "$PY_BIN" --arg srv "$GITHUB_WORKSPACE/adv_mcp/server.py" \
+            '{mcpServers:{"adv-info":{command:$py,args:[$srv]}}}')
+          echo "$CFG" > "$RUNNER_TEMP/adv-mcp.json"
+          case "$VARIANT" in
+            file)               MCP="--mcp-config $RUNNER_TEMP/adv-mcp.json"; TOOLS="mcp__adv-info__get_build_info" ;;
+            file_plus_github)   MCP="--mcp-config $RUNNER_TEMP/adv-mcp.json"; TOOLS="mcp__adv-info__get_build_info,mcp__github__get_me" ;;
+            inline_plus_github) MCP="--mcp-config '$CFG'";                   TOOLS="mcp__adv-info__get_build_info,mcp__github__get_me" ;;
+          esac
+          {
+            echo "value<<ADVEOF"
+            echo "--model haiku"
+            echo "--max-turns 6"
+            echo "$MCP"
+            echo "--allowedTools \"$TOOLS\""
+            echo "ADVEOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "variant=$VARIANT"; echo "tools=$TOOLS"
+
+      - name: Run Claude with custom MCP
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: ${{ steps.args.outputs.value }}
+          prompt: |
+            Call the tool mcp__adv-info__get_build_info exactly once and report its "marker", "sha" and
+            "tracked_files" values. If that tool is not available to you, reply with the single line
+            ADV-INFO-MISSING followed by the list of tool names you have that start with "mcp__".
+            Do not use any other tool.
+
+      - name: Analyze execution file
+        if: always()
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ -f "$EXEC_FILE" ]; then python3 adv_mcp/analyze_exec.py "$EXEC_FILE" "H3 ${{ matrix.variant }}" | tee -a "$GITHUB_STEP_SUMMARY"; else echo "no execution file"; fi
+
+      - name: Upload execution file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-plugins-mcp-h3-exec-${{ matrix.variant }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: ignore

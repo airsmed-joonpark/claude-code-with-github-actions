@@ -1,0 +1,55 @@
+name: "ADV plugins-mcp H1 - official plugin (/code-review)"
+
+# Installs the official code-review plugin from the claude-plugins-official
+# marketplace and runs its /code-review command on a PR.
+# Fires ONLY for PRs whose head branch starts with "adv-plugins-mcp/".
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  plugin-review:
+    if: startsWith(github.head_ref, 'adv-plugins-mcp/')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run /code-review from plugin
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          plugin_marketplaces: |
+            https://github.com/anthropics/claude-plugins-official.git
+          plugins: |
+            code-review@claude-plugins-official
+          prompt: |
+            /code-review --comment
+            Repository: ${{ github.repository }}  PR number: ${{ github.event.pull_request.number }}
+          claude_args: |
+            --max-budget-usd 6
+            --allowedTools "mcp__github_inline_comment__create_inline_comment,Bash(gh pr comment:*),Bash(gh pr diff:*),Bash(gh pr view:*),Bash(gh pr list:*),Bash(gh issue view:*),Bash(gh search:*)"
+
+      - name: Analyze execution file
+        if: always()
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ -f "$EXEC_FILE" ]; then python3 adv_mcp/analyze_exec.py "$EXEC_FILE" H1 | tee -a "$GITHUB_STEP_SUMMARY"; else echo "no execution file"; fi
+
+      - name: Upload execution file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-plugins-mcp-h1-exec
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: ignore

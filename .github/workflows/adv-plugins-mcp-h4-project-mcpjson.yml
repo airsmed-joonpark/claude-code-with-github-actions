@@ -1,0 +1,84 @@
+name: "ADV plugins-mcp H4 - project .mcp.json vs --mcp-config"
+
+# adv_mcp/.mcp.json is committed in a SUBFOLDER so it never affects other workflows.
+# Variants "root_*" copy it to ./.mcp.json on the runner only (same as committing it at repo root).
+#   root_default   : .mcp.json at root, tool allowed
+#   root_no_allow  : .mcp.json at root, tool NOT in --allowedTools
+#   root_strict    : .mcp.json at root, --strict-mcp-config
+#   root_user_only : .mcp.json at root, --setting-sources user
+#   subfolder_only : only adv_mcp/.mcp.json (no root file), tool allowed
+
+on:
+  workflow_dispatch:
+    inputs:
+      variants:
+        description: 'JSON array of variants'
+        default: '["root_default","root_no_allow","root_strict","root_user_only","subfolder_only"]'
+
+jobs:
+  project-mcpjson:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: ${{ fromJSON(inputs.variants) }}
+    permissions:
+      contents: read
+      issues: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install MCP server deps
+        run: python -m pip install -q -r adv_mcp/requirements.txt
+
+      - name: Place .mcp.json + build claude_args
+        id: args
+        env:
+          VARIANT: ${{ matrix.variant }}
+        run: |
+          case "$VARIANT" in
+            root_*) cp adv_mcp/.mcp.json ./.mcp.json ;;
+          esac
+          EXTRA=""; TOOLS="--allowedTools mcp__adv-proj__get_build_info"
+          case "$VARIANT" in
+            root_no_allow)  TOOLS="" ;;
+            root_strict)    EXTRA="--strict-mcp-config" ;;
+            root_user_only) EXTRA="--setting-sources user" ;;
+          esac
+          { echo "value<<ADVEOF"; echo "--model haiku"; echo "--max-turns 6"; [ -n "$EXTRA" ] && echo "$EXTRA"; [ -n "$TOOLS" ] && echo "$TOOLS"; echo "ADVEOF"; } >> "$GITHUB_OUTPUT"
+          ls -la .mcp.json 2>/dev/null || echo "no root .mcp.json"
+          cat ~/.claude/settings.json 2>/dev/null || true
+
+      - name: Run Claude
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          claude_args: ${{ steps.args.outputs.value }}
+          prompt: |
+            Call the tool mcp__adv-proj__get_build_info exactly once and report its "marker" and "sha".
+            If that tool is not available to you, reply with the single line ADV-PROJ-MISSING followed by
+            the list of tool names you have that start with "mcp__". Do not use any other tool.
+
+      - name: Analyze execution file
+        if: always()
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ -f "$EXEC_FILE" ]; then python3 adv_mcp/analyze_exec.py "$EXEC_FILE" "H4 ${{ matrix.variant }}" | tee -a "$GITHUB_STEP_SUMMARY"; else echo "no execution file"; fi
+
+      - name: Upload execution file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-plugins-mcp-h4-exec-${{ matrix.variant }}
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: ignore

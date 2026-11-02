@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "adv-proj": {
+      "command": "python",
+      "args": ["adv_mcp/server.py"]
+    }
+  }
+}

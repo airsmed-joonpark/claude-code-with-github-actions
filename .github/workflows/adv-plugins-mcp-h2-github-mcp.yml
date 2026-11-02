@@ -1,0 +1,65 @@
+name: "ADV plugins-mcp H2 - built-in GitHub MCP in agent mode"
+
+# In agent mode (explicit prompt) the action installs NO GitHub MCP server
+# unless claude_args --allowedTools names one:
+#   mcp__github / mcp__github__*                 -> official github-mcp-server (docker)
+#   mcp__github_comment / mcp__github_comment__* -> comment server
+#   mcp__github_ci__*  (+ actions: read)         -> CI server, PR context only
+#   mcp__github_inline_comment__*                -> inline review comments, PR context only
+
+on:
+  workflow_dispatch:
+    inputs:
+      allowed_tools:
+        description: "--allowedTools value"
+        default: "mcp__github,mcp__github_comment,mcp__github_ci"
+
+jobs:
+  github-mcp:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      issues: read
+      pull-requests: read
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude with GitHub MCP
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          additional_permissions: |
+            actions: read
+          claude_args: |
+            --model sonnet
+            --max-turns 15
+            --allowedTools "${{ inputs.allowed_tools }}"
+          prompt: |
+            Repository: ${{ github.repository }}
+            1. First, list every tool you have whose name starts with "mcp__" (just the names, grouped by server).
+            2. Using ONLY GitHub MCP tools (mcp__github__*), not Bash/gh, read the 5 most recent issues
+               (any state) and the 5 most recent pull requests (any state) of this repository.
+            3. Write a short markdown summary: a table of issues (number, title, state) and a table of PRs
+               (number, title, state, head branch), then 2-3 sentences on what the repo activity is about.
+            Do not create, edit or comment on anything.
+
+      - name: Analyze execution file
+        if: always()
+        env:
+          EXEC_FILE: ${{ steps.claude.outputs.execution_file }}
+        run: |
+          if [ -f "$EXEC_FILE" ]; then python3 adv_mcp/analyze_exec.py "$EXEC_FILE" H2 | tee -a "$GITHUB_STEP_SUMMARY"; else echo "no execution file"; fi
+
+      - name: Upload execution file
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-plugins-mcp-h2-exec
+          path: ${{ steps.claude.outputs.execution_file }}
+          if-no-files-found: ignore
