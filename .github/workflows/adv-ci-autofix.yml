@@ -7,8 +7,8 @@ name: "adv-ci-autofix"
 # Loop guards
 #   1. Trigger scope: only workflow_run of adv-ci-tests, conclusion == failure,
 #      head branch adv-ci/*, event == push (not workflow_dispatch).
-#   2. Attempt cap: every autofix commit carries an "Autofix-Attempt: N" trailer.
-#      The job counts those trailers on the branch and stops at MAX_ATTEMPTS.
+#   2. Attempt cap: every autofix commit carries an "Autofix-Attempt: N" line.
+#      The job counts those commits on the branch (git log --grep) and stops at MAX_ATTEMPTS.
 #   3. Stale guard: skip if the branch moved since the failing run (a human pushed).
 #   4. concurrency: one autofix per branch at a time.
 #   5. Test-tampering guard: settings deny Edit/Write on test files, and a
@@ -58,7 +58,10 @@ jobs:
             echo "Branch moved since the failing run ($HEAD_SHA -> $current). Skipping."
             echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
           fi
-          attempts=$(git log origin/main..HEAD --format='%(trailers:key=Autofix-Attempt,valueonly)' | grep -c . || true)
+          # Count with --grep, not %(trailers): the action appends a Co-Authored-By
+          # paragraph after Claude's message, so git no longer parses Autofix-Attempt
+          # as a trailer and %(trailers) returns 0 (observed in run 41437374175).
+          attempts=$(git log origin/main..HEAD --grep='^Autofix-Attempt:' --format=%h | wc -l | tr -d ' ')
           echo "previous autofix attempts on this branch: $attempts (max $MAX_ATTEMPTS)"
           if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
             echo "Attempt cap reached. Leaving the branch for a human."
