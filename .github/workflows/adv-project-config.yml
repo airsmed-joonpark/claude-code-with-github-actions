@@ -12,10 +12,10 @@ on:
   workflow_dispatch:
     inputs:
       scenario:
-        description: "c1 skill | c2 slash command | c3 subagent | c4 / c4cmd same as c1/c2 with --setting-sources user | perms-proj / perms-user Bash permission from .claude/settings.json"
+        description: "c1 skill | c1b c1 + --allowedTools Skill | c1s c1 + settings input | c2 slash command | c3 subagent | c4 / c4cmd = c1/c2 with --setting-sources user | perms-* = which permission source lets a write-ish Bash command run"
         type: choice
-        default: c1
-        options: [c1, c2, c3, c4, c4cmd, perms-proj, perms-user]
+        default: c1b
+        options: [c1, c1b, c1s, c2, c3, c4, c4cmd, perms-proj, perms-user, perms2-proj, perms2-user, perms2-settings, perms2-scoped]
 
 jobs:
   run:
@@ -35,17 +35,25 @@ jobs:
         run: |
           RN="Write release notes for the last 10 commits of this repository. Print them as your final answer. Do not create or modify any files."
           CMD="/adv-changelog 5"
+          WRITE_CMD="Run exactly this one Bash command: touch /tmp/adv-perm-ok && echo PERM_OK . Print its output. If the command is denied, answer only DENIED. Do not try alternatives or other tools."
+          S=""
           BASH_ONLY="Run the shell command 'git log --oneline -3' with the Bash tool and print its exact output. Do not use any other tool."
           case "$SCENARIO" in
             c1)         P="$RN";  A="--max-turns 12" ;;
+            c1b)        P="$RN";  A="--max-turns 12 --allowedTools Skill" ;;
+            c1s)        P="$RN";  A="--max-turns 12"; S='{"permissions":{"allow":["Skill(adv-release-notes)","Bash(git log:*)"]}}' ;;
             c2)         P="$CMD"; A="--max-turns 8" ;;
             c3)         P="Delegate a documentation check of README.md and docs/FAQ.md to the adv-doc-checker subagent (use the Task/Agent tool with that subagent type). Do not check the files yourself. Then print the subagent's report as your final answer."; A="--max-turns 10" ;;
             c4)         P="$RN";  A="--max-turns 12 --setting-sources user --allowedTools Bash,Read,Grep,Glob,Skill" ;;
             c4cmd)      P="$CMD"; A="--max-turns 8 --setting-sources user --allowedTools Bash,Read,Grep,Glob,Skill" ;;
             perms-proj) P="$BASH_ONLY"; A="--max-turns 4" ;;
             perms-user) P="$BASH_ONLY"; A="--max-turns 4 --setting-sources user" ;;
+            perms2-proj)     P="$WRITE_CMD"; A="--max-turns 4" ;;
+            perms2-user)     P="$WRITE_CMD"; A="--max-turns 4 --setting-sources user" ;;
+            perms2-settings) P="$WRITE_CMD"; A="--max-turns 4 --setting-sources user"; S='{"permissions":{"allow":["Bash"]}}' ;;
+            perms2-scoped)   P="$WRITE_CMD"; A="--max-turns 4 --setting-sources user"; S='{"permissions":{"allow":["Bash(touch:*)","Bash(echo:*)"]}}' ;;
           esac
-          { echo "prompt<<EOF_P"; echo "$P"; echo "EOF_P"; echo "args=$A"; } >> "$GITHUB_OUTPUT"
+          { echo "prompt<<EOF_P"; echo "$P"; echo "EOF_P"; echo "args=$A"; echo "settings=$S"; } >> "$GITHUB_OUTPUT"
 
       - name: Run Claude Code
         id: claude
@@ -56,7 +64,16 @@ jobs:
           # (unless --setting-sources excludes "project").
           claude_args: ${{ steps.pick.outputs.args }}
           prompt: ${{ steps.pick.outputs.prompt }}
+          # `settings` is written to ~/.claude/settings.json on the runner = the "user" setting source.
+          settings: ${{ steps.pick.outputs.settings }}
           display_report: "true"
+
+      - name: Show effective config files (no secrets in these)
+        if: always()
+        run: |
+          echo "--- ~/.claude/settings.json (user source, written by the action's settings input)"; cat ~/.claude/settings.json 2>/dev/null || echo "(none)"
+          echo "--- .claude/settings.json (project source)"; cat .claude/settings.json 2>/dev/null || echo "(none)"
+          if [ -f /tmp/adv-perm-ok ]; then echo "PERM_CHECK: /tmp/adv-perm-ok exists (Bash write command ran)"; else echo "PERM_CHECK: /tmp/adv-perm-ok missing"; fi
 
       - name: Upload execution file
         if: always()
