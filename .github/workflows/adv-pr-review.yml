@@ -58,6 +58,8 @@ jobs:
                In the summary, list which earlier findings are now resolved.
             4. Put the summary (findings table: file:line, severity, status new/still-open/resolved) in your
                tracking comment. Keep it under 30 lines. No praise, no style nits.
+            5. If your system instructions describe a "Fix this →" link format, add one such link per finding
+               in the summary table (extra column). If they do not, do not invent links.
           claude_args: |
             --model sonnet
             --max-turns 30
