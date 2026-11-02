@@ -3,11 +3,14 @@ name: "ADV - Guardrails (least privilege, cost, hooks)"
 # Manual-only test bench for running Claude Code WITHOUT --dangerously-skip-permissions.
 # Each `case` picks one guardrail experiment. Nothing here fires on push/issue/PR events.
 #   b1          : --allowedTools / --disallowedTools whitelist (read-only repo summary + denied curl/rm)
+#   b1-probe    : only --allowedTools Read; does the repo's .claude/settings.json (allow: Bash) widen it?
+#   b1-iso      : same as b1-probe but --setting-sources user (ignore project settings)
 #   b2-haiku    : --model claude-haiku-5-5 --effort low (cheap model)
 #   b2-default  : same task, default model (cost comparison)
 #   b2-turns    : --max-turns 3 on a multi-step task (turn cap)
 #   b2-budget   : --max-budget-usd 0.05 on a multi-step task (budget stop)
 #   b2-fallback : --model <main> --fallback-model claude-haiku-5-5
+#   b2-fallback-bad: invalid --model + --fallback-model (does fallback kick in?)
 #   b2-timeout  : job timeout-minutes 2 with a long task (hard wall-clock cap)
 #   b3          : hooks + permissions.deny + env via the `settings` input, audit log artifact
 #   b4          : --append-system-prompt to force Korean / max 5 bullets
@@ -19,7 +22,7 @@ on:
         description: "Experiment to run"
         required: true
         type: choice
-        options: [b1, b2-haiku, b2-default, b2-turns, b2-budget, b2-fallback, b2-timeout, b3, b4]
+        options: [b1, b1-probe, b1-iso, b2-haiku, b2-default, b2-turns, b2-budget, b2-fallback, b2-fallback-bad, b2-timeout, b3, b4]
 
 permissions:
   contents: read
@@ -88,8 +91,17 @@ jobs:
               ARGS='--model claude-sonnet-5 --fallback-model claude-haiku-5-5 --allowedTools "Read,Glob,Grep,Bash(ls:*)"'
               PROMPT="Summarize this repository in 3 bullet points." ;;
             b2-timeout)
-              ARGS='--allowedTools "Read,Glob,Grep,Bash(ls:*),Bash(wc:*),Bash(sleep:*)"'
-              PROMPT="Run 'sleep 100' with Bash three times in a row, one call each, then summarize the repository." ;;
+              ARGS='--allowedTools "Read,Glob,Grep,Bash(ls:*),Bash(python3:*)"'
+              PROMPT="This is a timeout test. Run this exact command with Bash in the FOREGROUND (do not use run_in_background) three times, one call each, waiting for each to finish: python3 -c 'import time; time.sleep(100); print(\"done\")'. Then summarize the repository." ;;
+            b1-probe)
+              ARGS='--allowedTools "Read"'
+              PROMPT="Run these with Bash, one call each, and report output or denial verbatim: 1) whoami 2) wc -l README.md 3) touch probe.txt. Do not work around denials." ;;
+            b1-iso)
+              ARGS='--setting-sources user --allowedTools "Read"'
+              PROMPT="Run these with Bash, one call each, and report output or denial verbatim: 1) whoami 2) wc -l README.md 3) touch probe.txt. Do not work around denials." ;;
+            b2-fallback-bad)
+              ARGS='--model claude-does-not-exist-9 --fallback-model claude-haiku-5-5 --allowedTools "Read,Glob"'
+              PROMPT="Reply with the single word OK." ;;
             b3)
               ARGS='--allowedTools "Bash,Read,Glob,Grep,WebFetch"'
               SETTINGS=$(jq -nc --arg pre "$HOOKDIR/block-bash.sh" --arg post "$HOOKDIR/audit.sh" --arg a "$AUDIT" '{
