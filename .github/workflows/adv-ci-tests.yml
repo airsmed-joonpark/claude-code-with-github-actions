@@ -1,0 +1,31 @@
+name: "adv-ci-tests"
+
+# Advanced scenario (ci-autofix): plain pytest CI for the adv_ci/ demo package.
+# Runs only on branches named adv-ci/* (and manual dispatch). A failure here
+# triggers "adv-ci-autofix" through workflow_run.
+
+on:
+  push:
+    branches: ["adv-ci/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        run: python -m pip install --quiet pytest
+      - name: Run tests
+        run: |
+          if [ ! -d adv_ci ]; then
+            echo "adv_ci/ is not on this ref; nothing to test."
+            exit 0
+          fi
+          python -m pytest adv_ci -q

@@ -1,0 +1,168 @@
+name: "adv-ci-autofix"
+
+# Advanced scenario (ci-autofix): when "adv-ci-tests" fails on an adv-ci/* branch,
+# Claude reads the failed job log, fixes the source (never the tests) and pushes
+# a commit to the same branch. That push re-runs adv-ci-tests.
+#
+# Loop guards
+#   1. Trigger scope: only workflow_run of adv-ci-tests, conclusion == failure,
+#      head branch adv-ci/*, event == push (not workflow_dispatch).
+#   2. Attempt cap: every autofix commit carries an "Autofix-Attempt: N" trailer.
+#      The job counts those trailers on the branch and stops at MAX_ATTEMPTS.
+#   3. Stale guard: skip if the branch moved since the failing run (a human pushed).
+#   4. concurrency: one autofix per branch at a time.
+#   5. Test-tampering guard: settings deny Edit/Write on test files, and a
+#      post-check fails the job if the pushed commit touched adv_ci/test_*.py.
+#
+# workflow_run workflows only fire from the default branch, so this file must live on main.
+
+on:
+  workflow_run:
+    workflows: ["adv-ci-tests"]
+    types: [completed]
+
+concurrency:
+  group: adv-ci-autofix-${{ github.event.workflow_run.head_branch }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  actions: read
+  id-token: write
+
+env:
+  MAX_ATTEMPTS: "2"
+
+jobs:
+  autofix:
+    if: |
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.event == 'push' &&
+      startsWith(github.event.workflow_run.head_branch, 'adv-ci/') &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout failing branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_branch }}
+          fetch-depth: 0
+
+      - name: Guards (stale branch, attempt cap)
+        id: guard
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          current=$(git rev-parse HEAD)
+          if [ "$current" != "$HEAD_SHA" ]; then
+            echo "Branch moved since the failing run ($HEAD_SHA -> $current). Skipping."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          attempts=$(git log origin/main..HEAD --format='%(trailers:key=Autofix-Attempt,valueonly)' | grep -c . || true)
+          echo "previous autofix attempts on this branch: $attempts (max $MAX_ATTEMPTS)"
+          if [ "$attempts" -ge "$MAX_ATTEMPTS" ]; then
+            echo "Attempt cap reached. Leaving the branch for a human."
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+          echo "next=$((attempts + 1))" >> "$GITHUB_OUTPUT"
+
+      - name: Collect failed job log
+        if: steps.guard.outputs.skip == 'false'
+        id: logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          gh run view "$RUN_ID" -R "$GITHUB_REPOSITORY" --log-failed \
+            | sed -E 's/\x1b\[[0-9;]*m//g; s/^[^\t]*\t[^\t]*\t[0-9TZ:.-]+ //' \
+            | tail -n 120 > "$RUNNER_TEMP/failed.log"
+          wc -l "$RUNNER_TEMP/failed.log"
+          {
+            echo "log<<ADV_CI_EOF"
+            cat "$RUNNER_TEMP/failed.log"
+            echo "ADV_CI_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.skip == 'false'
+        with:
+          python-version: "3.12"
+      - name: Install pytest
+        if: steps.guard.outputs.skip == 'false'
+        run: python -m pip install --quiet pytest
+
+      - name: Claude fixes the code
+        if: steps.guard.outputs.skip == 'false'
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          settings: |
+            {
+              "permissions": {
+                "deny": [
+                  "Edit(adv_ci/test_*.py)",
+                  "Write(adv_ci/test_*.py)",
+                  "Bash(git push --force:*)",
+                  "Bash(git push -f:*)"
+                ]
+              }
+            }
+          claude_args: >-
+            --max-turns 20
+            --allowedTools "Read,Edit,Glob,Grep,Bash(python -m pytest:*),Bash(git status:*),Bash(git diff:*),Bash(git log:*),Bash(git add:*),Bash(git commit:*),Bash(git push:*)"
+          prompt: |
+            The CI workflow "adv-ci-tests" failed on branch `${{ github.event.workflow_run.head_branch }}`
+            (run ${{ github.event.workflow_run.html_url }}). The failing job's log tail is below.
+
+            <failed_log>
+            ${{ steps.logs.outputs.log }}
+            </failed_log>
+
+            Your job:
+            1. Find the root cause in the source under adv_ci/. Fix the CODE, not the tests.
+               Files named adv_ci/test_*.py are the specification and must not be changed.
+            2. Run `python -m pytest adv_ci -q` and make sure it passes.
+            3. Commit only the source change with this exact message format:
+
+               fix(adv_ci): <one-line summary>
+
+               <two or three lines: root cause and fix>
+
+               Autofix-Attempt: ${{ steps.guard.outputs.next }}
+
+            4. Push with `git push origin HEAD:${{ github.event.workflow_run.head_branch }}` (no force push).
+            If you cannot fix it without touching tests, do not commit; explain why instead.
+
+      - name: Post-check (tests untouched, commit pushed)
+        if: steps.guard.outputs.skip == 'false'
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+        run: |
+          git fetch -q origin "$BRANCH"
+          new=$(git rev-parse "origin/$BRANCH")
+          echo "branch head: $HEAD_SHA -> $new"
+          if [ "$new" = "$HEAD_SHA" ]; then
+            echo "::warning::Claude did not push a fix."; exit 0
+          fi
+          git diff --name-only "$HEAD_SHA" "$new" | tee "$RUNNER_TEMP/changed.txt"
+          if grep -E '(^|/)test_[^/]*\.py$' "$RUNNER_TEMP/changed.txt"; then
+            echo "::error::Autofix commit modified test files."; exit 1
+          fi
+          {
+            echo "## adv-ci-autofix"
+            echo "- failing run: ${{ github.event.workflow_run.html_url }}"
+            echo "- pushed: \`$new\` (attempt ${{ steps.guard.outputs.next }})"
+            echo "- changed files:"; sed 's/^/  - /' "$RUNNER_TEMP/changed.txt"
+            echo; git log -1 --format='```%n%B```' "$new"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload execution file
+        if: always() && steps.claude.outputs.execution_file != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: adv-ci-autofix-execution
+          path: ${{ steps.claude.outputs.execution_file }}
+          retention-days: 3
